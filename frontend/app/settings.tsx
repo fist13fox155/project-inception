@@ -6,7 +6,7 @@ import {
   View, Text, StyleSheet, Pressable, Switch, ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { theme, API } from '../constants/theme';
@@ -74,7 +74,7 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="settings-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
+          <Icon name="chevron-back" size={24} color={theme.colors.text} />
         </Pressable>
         <Text style={styles.title}>SETTINGS</Text>
         <View style={{ width: 24 }} />
@@ -119,7 +119,7 @@ export default function SettingsScreen() {
               >
                 {testing === v.id
                   ? <ActivityIndicator size="small" color={theme.colors.neon} />
-                  : <Ionicons name="play-circle-outline" size={22} color={theme.colors.neon} />
+                  : <Icon name="play-circle-outline" size={22} color={theme.colors.neon} />
                 }
               </Pressable>
             </Pressable>
@@ -148,7 +148,7 @@ export default function SettingsScreen() {
               <Text style={styles.sectionLabel}>WATCHLIST</Text>
               <Text style={styles.linkHint}>Browse 30K+ stocks & track favorites</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+            <Icon name="chevron-forward" size={20} color={theme.colors.textSecondary} />
           </View>
         </Pressable>
 

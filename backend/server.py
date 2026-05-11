@@ -1182,6 +1182,24 @@ async def send_message(m: EncryptedMessage):
     return msg
 
 
+@api.delete("/dagrcmd/messages/{message_id}")
+async def delete_message(message_id: str, callsign: str, auth_code: str):
+    cs = callsign.strip().upper()
+    officer = await db.dagr_officers.find_one({"callsign": cs})
+    if not officer or officer.get("auth_hash") != _hash_code(cs, auth_code):
+        raise HTTPException(401, "Auth failed")
+    msg = await db.dagr_messages.find_one({"id": message_id})
+    if not msg:
+        raise HTTPException(404, "Not found")
+    if msg.get("sender") != cs:
+        raise HTTPException(403, "You can only delete your own messages")
+    await db.dagr_messages.delete_one({"id": message_id})
+    chan = await db.dagr_channels.find_one({"id": msg["channel_id"]})
+    if chan:
+        await _dagr_broadcast(chan["members"], {"type": "delete", "message_id": message_id, "channel_id": msg["channel_id"]})
+    return {"deleted": True, "id": message_id}
+
+
 @api.get("/dagrcmd/messages/{channel_id}")
 async def list_messages(channel_id: str, callsign: str, limit: int = 100):
     cs = callsign.strip().upper()

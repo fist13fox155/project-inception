@@ -7,7 +7,7 @@ import {
   ActivityIndicator, TextInput, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import { theme, API } from '../constants/theme';
 import Sparkline from '../components/Sparkline';
@@ -89,11 +89,11 @@ export default function StocksScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="stocks-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
+          <Icon name="chevron-back" size={24} color={theme.colors.text} />
         </Pressable>
         <Text style={styles.title}>STOCK TRACKER</Text>
         <Pressable onPress={() => router.push('/stocks/browse' as any)} testID="stocks-browse-btn" style={styles.iconBtn}>
-          <Ionicons name="search" size={20} color={theme.colors.neon} />
+          <Icon name="search" size={20} color={theme.colors.neon} />
         </Pressable>
       </View>
 
@@ -109,7 +109,7 @@ export default function StocksScreen() {
           testID="add-symbol-input"
         />
         <Pressable onPress={add} style={styles.addBtn} testID="add-symbol-btn">
-          <Ionicons name="add" size={20} color={theme.colors.bg} />
+          <Icon name="add" size={20} color={theme.colors.bg} />
         </Pressable>
       </View>
 
@@ -153,7 +153,7 @@ export default function StocksScreen() {
                   <Pressable onPress={() => Alert.alert('Remove', `Remove ${q.symbol}?`, [
                     { text: 'Cancel' }, { text: 'Remove', style: 'destructive', onPress: () => remove(q.symbol) }
                   ])} style={styles.delBtn} testID={`del-${q.symbol}`}>
-                    <Ionicons name="close" size={14} color={theme.colors.textTertiary} />
+                    <Icon name="close" size={14} color={theme.colors.textTertiary} />
                   </Pressable>
                 </View>
               </Pressable>

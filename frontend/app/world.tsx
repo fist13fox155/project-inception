@@ -8,7 +8,7 @@ import {
   RefreshControl, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import { theme, API } from '../constants/theme';
 
@@ -69,7 +69,7 @@ export default function WorldScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="world-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={22} color={theme.colors.text} />
+          <Icon name="chevron-back" size={22} color={theme.colors.text} />
         </Pressable>
         <Text style={styles.title}>WORLD INTEL</Text>
         <View style={{ width: 28 }} />
@@ -83,7 +83,7 @@ export default function WorldScreen() {
         {/* Hotspot clocks */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="time-outline" size={14} color={theme.colors.danger} />
+            <Icon name="time-outline" size={14} color={theme.colors.danger} />
             <Text style={styles.sectionTitle}>HOTSPOT TIMEZONES</Text>
             <Text style={styles.sectionMeta}>{hotspots.length} CITIES</Text>
           </View>
@@ -102,7 +102,7 @@ export default function WorldScreen() {
         {/* Crisis feed */}
         <View>
           <View style={styles.sectionHeader}>
-            <Ionicons name="radio" size={14} color={theme.colors.danger} />
+            <Icon name="radio" size={14} color={theme.colors.danger} />
             <Text style={styles.sectionTitle}>LIVE CRISIS FEED</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10 }}>
@@ -113,7 +113,7 @@ export default function WorldScreen() {
                 style={[styles.catChip, cat === c.key && { borderColor: c.color, backgroundColor: 'rgba(255,255,255,0.05)' }]}
                 testID={`cat-${c.key}`}
               >
-                <Ionicons name={c.icon as any} size={13} color={cat === c.key ? c.color : theme.colors.textSecondary} />
+                <Icon name={c.icon as any} size={13} color={cat === c.key ? c.color : theme.colors.textSecondary} />
                 <Text style={[styles.catText, cat === c.key && { color: c.color }]}>{c.label}</Text>
               </Pressable>
             ))}

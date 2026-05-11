@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
@@ -128,7 +128,7 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="chat-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
+          <Icon name="chevron-back" size={24} color={theme.colors.text} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.title}>JARVIS</Text>
@@ -192,7 +192,7 @@ export default function ChatScreen() {
             onPressOut={stopRecording}
             style={[styles.micBtn, recording && styles.micBtnActive]}
           >
-            <Ionicons name={recording ? 'radio' : 'mic-outline'} size={22} color={recording ? theme.colors.danger : theme.colors.neon} />
+            <Icon name={recording ? 'radio' : 'mic-outline'} size={22} color={recording ? theme.colors.danger : theme.colors.neon} />
           </Pressable>
           <TextInput
             style={styles.input}
@@ -209,7 +209,7 @@ export default function ChatScreen() {
             onPress={() => send(input)}
             style={[styles.sendBtn, (!input.trim() || sending) && { opacity: 0.4 }]}
           >
-            <Ionicons name="send" size={18} color={theme.colors.bg} />
+            <Icon name="send" size={18} color={theme.colors.bg} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>

@@ -6,7 +6,7 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -69,11 +69,11 @@ export default function LibraryScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="library-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
+          <Icon name="chevron-back" size={24} color={theme.colors.text} />
         </Pressable>
         <Text style={styles.title}>LIBRARY</Text>
         <Pressable onPress={() => router.push('/document')} testID="library-new" style={styles.iconBtn}>
-          <Ionicons name="add" size={22} color={theme.colors.green} />
+          <Icon name="add" size={22} color={theme.colors.green} />
         </Pressable>
       </View>
 
@@ -86,7 +86,7 @@ export default function LibraryScreen() {
           <ActivityIndicator color={theme.colors.neon} style={{ marginTop: 24 }} />
         ) : docs.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="documents-outline" size={56} color={theme.colors.textTertiary} />
+            <Icon name="documents-outline" size={56} color={theme.colors.textTertiary} />
             <Text style={styles.emptyText}>No documents yet</Text>
             <Text style={styles.emptyHint}>Ask JARVIS to draft your first PDF or PPTX.</Text>
             <Pressable onPress={() => router.push('/document')} style={styles.emptyBtn} testID="library-create">
@@ -115,11 +115,11 @@ export default function LibraryScreen() {
                 {downloadingId === d.id ? (
                   <ActivityIndicator size="small" color={theme.colors.neon} />
                 ) : (
-                  <Ionicons name="share-outline" size={20} color={theme.colors.textSecondary} />
+                  <Icon name="share-outline" size={20} color={theme.colors.textSecondary} />
                 )}
               </Pressable>
               <Pressable onPress={() => del(d)} style={styles.delBtn} testID={`del-doc-${d.id}`}>
-                <Ionicons name="trash-outline" size={16} color={theme.colors.danger} />
+                <Icon name="trash-outline" size={16} color={theme.colors.danger} />
               </Pressable>
             </View>
           ))

@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { theme, API } from '../constants/theme';
@@ -82,7 +82,7 @@ export default function Home() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <Ionicons name="globe-outline" size={22} color={theme.colors.text} />
+            <Icon name="globe-outline" size={22} color={theme.colors.text} />
             <Text style={styles.logoText}>PROJECT INCEPTION</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -91,7 +91,7 @@ export default function Home() {
               testID="open-dagrcmd"
               style={styles.dagrBadge}
             >
-              <Ionicons name="shield-half" size={11} color="#FF3333" />
+              <Icon name="shield-half" size={11} color="#FF3333" />
               <Text style={styles.dagrText}>DAGRCMD</Text>
             </Pressable>
             <View style={styles.liveBadge} testID="live-indicator">
@@ -119,7 +119,7 @@ export default function Home() {
                 style={[styles.tickerCell, styles.addTile]}
                 testID="add-stock-tile"
               >
-                <Ionicons name="add-circle-outline" size={26} color={theme.colors.neon} />
+                <Icon name="add-circle-outline" size={26} color={theme.colors.neon} />
                 <Text style={styles.addTileText}>ADD STOCK</Text>
               </Pressable>
             )}
@@ -134,7 +134,7 @@ export default function Home() {
             <Text style={styles.jarvisLabel}>JARVIS</Text>
             <Text style={styles.bubbleText}>{greeting}</Text>
             <View style={styles.bubbleActions}>
-              <Ionicons name={voiceMode ? 'volume-high' : 'volume-mute'} size={14} color={theme.colors.neon} />
+              <Icon name={voiceMode ? 'volume-high' : 'volume-mute'} size={14} color={theme.colors.neon} />
               <Text style={styles.bubbleHint}>{voiceMode ? 'NARRATING' : 'TAP TO HEAR'}</Text>
             </View>
           </View>
@@ -154,7 +154,7 @@ export default function Home() {
               ]}
             >
               <View style={[styles.iconBubble, { borderColor: a.color, shadowColor: a.color }]}>
-                <Ionicons name={a.icon} size={26} color={a.color} />
+                <Icon name={a.icon} size={26} color={a.color} />
               </View>
               <Text style={styles.actionLabel1}>{a.label1}</Text>
               <Text style={styles.actionLabel2}>{a.label2}</Text>
@@ -165,15 +165,15 @@ export default function Home() {
         {/* Bottom nav */}
         <View style={styles.bottomNav}>
           <Pressable style={styles.navBtn} onPress={() => router.push('/world')} testID="nav-world">
-            <Ionicons name="earth-outline" size={20} color={theme.colors.danger} />
+            <Icon name="earth-outline" size={20} color={theme.colors.danger} />
             <Text style={[styles.navText, { color: theme.colors.danger }]}>WORLD</Text>
           </Pressable>
           <Pressable style={styles.navBtn} onPress={() => router.push('/library')} testID="nav-library">
-            <Ionicons name="folder-open-outline" size={20} color={theme.colors.textSecondary} />
+            <Icon name="folder-open-outline" size={20} color={theme.colors.textSecondary} />
             <Text style={styles.navText}>LIBRARY</Text>
           </Pressable>
           <Pressable style={styles.navBtn} onPress={() => router.push('/settings')} testID="nav-settings">
-            <Ionicons name="settings-outline" size={20} color={theme.colors.textSecondary} />
+            <Icon name="settings-outline" size={20} color={theme.colors.textSecondary} />
             <Text style={styles.navText}>SETTINGS</Text>
           </Pressable>
         </View>

@@ -7,7 +7,7 @@ import {
   ActivityIndicator, Alert, RefreshControl, KeyboardAvoidingView, Platform, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../../components/Icon';
 import { useRouter } from 'expo-router';
 import { dagrTheme as T } from '../../constants/dagrTheme';
 import { API, BACKEND_URL } from '../../constants/theme';
@@ -112,7 +112,7 @@ export default function CommsScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.replace('/dagrcmd')} testID="comms-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={22} color={T.colors.textPrimary} />
+          <Icon name="chevron-back" size={22} color={T.colors.textPrimary} />
         </Pressable>
         <Pressable
           onLongPress={() => {
@@ -147,7 +147,7 @@ export default function CommsScreen() {
           <Text style={styles.callsign}>{me.callsign} · long-press to rename</Text>
         </Pressable>
         <Pressable onPress={logout} testID="comms-logout" style={styles.iconBtn}>
-          <Ionicons name="log-out-outline" size={20} color={T.colors.textMuted} />
+          <Icon name="log-out-outline" size={20} color={T.colors.textMuted} />
         </Pressable>
       </View>
 
@@ -158,15 +158,15 @@ export default function CommsScreen() {
 
       <View style={styles.actions}>
         <Pressable onPress={() => setShowCreate(true)} style={styles.actBtn} testID="create-channel-btn">
-          <Ionicons name="add-circle-outline" size={16} color={T.colors.red} />
+          <Icon name="add-circle-outline" size={16} color={T.colors.red} />
           <Text style={styles.actText}>NEW CHANNEL</Text>
         </Pressable>
         <Pressable onPress={() => setShowJoin(true)} style={styles.actBtn} testID="join-channel-btn">
-          <Ionicons name="enter-outline" size={16} color={T.colors.red} />
+          <Icon name="enter-outline" size={16} color={T.colors.red} />
           <Text style={styles.actText}>JOIN BY CODE</Text>
         </Pressable>
         <Pressable onPress={() => router.push('/dagrcmd/map' as any)} style={styles.actBtn} testID="open-map-btn">
-          <Ionicons name="map-outline" size={16} color={T.colors.red} />
+          <Icon name="map-outline" size={16} color={T.colors.red} />
           <Text style={styles.actText}>TAC MAP</Text>
         </Pressable>
       </View>
@@ -180,7 +180,7 @@ export default function CommsScreen() {
           <ActivityIndicator color={T.colors.red} style={{ marginTop: 32 }} />
         ) : channels.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="radio-outline" size={48} color={T.colors.textMuted} />
+            <Icon name="radio-outline" size={48} color={T.colors.textMuted} />
             <Text style={styles.emptyText}>NO ACTIVE CHANNELS</Text>
             <Text style={styles.emptyHint}>
               Create a closed channel or join one with an invite code from another officer.
@@ -194,7 +194,7 @@ export default function CommsScreen() {
                 style={styles.channelLeft}
               >
                 <View style={styles.channelIcon}>
-                  <Ionicons name="lock-closed" size={16} color={T.colors.red} />
+                  <Icon name="lock-closed" size={16} color={T.colors.red} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.channelName}>{c.name}</Text>
@@ -209,7 +209,7 @@ export default function CommsScreen() {
                 style={styles.shareBtn}
                 testID={`share-${c.id}`}
               >
-                <Ionicons name="share-social" size={18} color={T.colors.amber} />
+                <Icon name="share-social" size={18} color={T.colors.amber} />
                 <Text style={styles.shareBtnText}>INVITE</Text>
               </Pressable>
             </View>

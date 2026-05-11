@@ -8,7 +8,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -71,11 +71,11 @@ export default function DocumentScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="doc-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
+          <Icon name="chevron-back" size={24} color={theme.colors.text} />
         </Pressable>
         <Text style={styles.title}>CREATE DOCUMENT</Text>
         <Pressable onPress={() => router.push('/library')} style={styles.iconBtn} testID="doc-library">
-          <Ionicons name="folder-open-outline" size={22} color={theme.colors.green} />
+          <Icon name="folder-open-outline" size={22} color={theme.colors.green} />
         </Pressable>
       </View>
 
@@ -135,7 +135,7 @@ export default function DocumentScreen() {
           >
             {busy ? <ActivityIndicator color={theme.colors.bg} /> : (
               <>
-                <Ionicons name="sparkles" size={18} color={theme.colors.bg} />
+                <Icon name="sparkles" size={18} color={theme.colors.bg} />
                 <Text style={styles.generateText}>GENERATE WITH JARVIS</Text>
               </>
             )}
@@ -144,7 +144,7 @@ export default function DocumentScreen() {
           {result && (
             <View style={[styles.card, { borderColor: 'rgba(0,255,102,0.4)' }]} testID="doc-result">
               <View style={styles.resultHeader}>
-                <Ionicons name="checkmark-circle" size={20} color={theme.colors.green} />
+                <Icon name="checkmark-circle" size={20} color={theme.colors.green} />
                 <Text style={styles.resultTitle}>{result.title}</Text>
               </View>
               <Text style={styles.resultMeta}>
@@ -162,7 +162,7 @@ export default function DocumentScreen() {
                 ))}
               </View>
               <Pressable onPress={share} style={styles.shareBtn} testID="share-btn">
-                <Ionicons name="share-outline" size={18} color={theme.colors.bg} />
+                <Icon name="share-outline" size={18} color={theme.colors.bg} />
                 <Text style={styles.shareText}>EXPORT / SHARE</Text>
               </Pressable>
             </View>

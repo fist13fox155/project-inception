@@ -8,10 +8,12 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../../../components/Icon';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'react-native';
 import { dagrTheme as T } from '../../../constants/dagrTheme';
 import { API, BACKEND_URL } from '../../../constants/theme';
 import {
@@ -21,7 +23,7 @@ import {
 type Channel = { id: string; name: string; owner: string; members: string[]; join_code: string };
 type EncMsg = {
   id: string; channel_id: string; sender: string; sender_pubkey: string;
-  kind: 'text' | 'audio' | 'location';
+  kind: 'text' | 'audio' | 'location' | 'image';
   ciphertexts: Record<string, { ct: string; nonce: string }>;
   ciphertext_for_me?: { ct: string; nonce: string };
   meta?: any; timestamp: string;
@@ -126,7 +128,7 @@ export default function ChannelScreen() {
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, [messages]);
 
-  const send = async (kind: 'text' | 'audio' | 'location', payload: string, meta: any = {}) => {
+  const send = async (kind: 'text' | 'audio' | 'location' | 'image', payload: string, meta: any = {}) => {
     if (!me || !channel || !payload) return;
     setSending(true);
     try {
@@ -208,6 +210,41 @@ export default function ChannelScreen() {
     } catch (e) { setPlayingId(null); }
   };
 
+  const sendImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Permission needed', 'Photo library access required.'); return; }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.5,
+        base64: true,
+      });
+      if (res.canceled || !res.assets?.[0]?.base64) return;
+      const b64 = res.assets[0].base64!;
+      const w = res.assets[0].width || 0;
+      const h = res.assets[0].height || 0;
+      await send('image', b64, { w, h });
+    } catch (e: any) { Alert.alert('Image failed', String(e?.message || e)); }
+  };
+
+  const deleteMsg = async (m: DecodedMsg) => {
+    if (!me) return;
+    if (m.sender !== me.callsign) { Alert.alert('Cannot delete', 'You can only delete your own messages.'); return; }
+    Alert.alert('Delete transmission?', 'This removes it for everyone in the channel.', [
+      { text: 'Cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          const r = await fetch(
+            `${API}/dagrcmd/messages/${m.id}?callsign=${encodeURIComponent(me.callsign)}&auth_code=${encodeURIComponent(me.authCode)}`,
+            { method: 'DELETE' }
+          );
+          if (!r.ok) throw new Error(await r.text());
+          setMessages(prev => prev.filter(x => x.id !== m.id));
+        } catch (e: any) { Alert.alert('Delete failed', String(e?.message || e)); }
+      }},
+    ]);
+  };
+
   if (loading || !me || !channel) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -220,7 +257,7 @@ export default function ChannelScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="ch-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={22} color={T.colors.textPrimary} />
+          <Icon name="chevron-back" size={22} color={T.colors.textPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.title}>{channel.name}</Text>
@@ -236,7 +273,7 @@ export default function ChannelScreen() {
           </View>
         </View>
         <Pressable onPress={sendLocation} style={styles.iconBtn} testID="loc-btn">
-          <Ionicons name="locate" size={20} color={T.colors.amber} />
+          <Icon name="locate" size={20} color={T.colors.amber} />
         </Pressable>
       </View>
 
@@ -257,14 +294,26 @@ export default function ChannelScreen() {
             const failed = m.plaintext === null;
             return (
               <View key={m.id} style={[styles.msgRow, mine && styles.msgRowMine]}>
-                <View style={[styles.msgBubble, mine ? styles.msgMine : styles.msgOther, failed && styles.msgFailed]}>
+                <Pressable
+                  onLongPress={() => deleteMsg(m)}
+                  delayLongPress={400}
+                  style={[styles.msgBubble, mine ? styles.msgMine : styles.msgOther, failed && styles.msgFailed]}
+                  testID={`bubble-${m.id}`}
+                >
                   {!mine && <Text style={styles.msgSender}>{m.sender}</Text>}
                   {m.kind === 'text' && (
                     <Text style={styles.msgText}>{failed ? '[encrypted · undecryptable]' : m.plaintext}</Text>
                   )}
+                  {m.kind === 'image' && !failed && m.plaintext && (
+                    <Image
+                      source={{ uri: `data:image/jpeg;base64,${m.plaintext}` }}
+                      style={{ width: 200, height: 200, borderRadius: 6, marginVertical: 4 }}
+                      resizeMode="cover"
+                    />
+                  )}
                   {m.kind === 'audio' && (
                     <Pressable onPress={() => playAudio(m)} style={styles.audioRow} testID={`audio-${m.id}`}>
-                      <Ionicons name={playingId === m.id ? 'pause-circle' : 'play-circle'} size={26} color={T.colors.red} />
+                      <Icon name={playingId === m.id ? 'pause-circle' : 'play-circle'} size={26} color={T.colors.red} />
                       <View>
                         <Text style={styles.msgText}>VOICE TRANSMISSION</Text>
                         <Text style={styles.msgMeta}>{Math.round((m.meta?.audio_ms || 0) / 100) / 10}s · encrypted</Text>
@@ -277,7 +326,7 @@ export default function ChannelScreen() {
                       return (
                         <View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="location" size={16} color={T.colors.amber} />
+                            <Icon name="location" size={16} color={T.colors.amber} />
                             <Text style={styles.msgText}>POSITION PING</Text>
                           </View>
                           <Text style={styles.coords}>{loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}</Text>
@@ -286,8 +335,8 @@ export default function ChannelScreen() {
                       );
                     } catch { return <Text style={styles.msgText}>[malformed location]</Text>; }
                   })()}
-                  <Text style={styles.msgTime}>{new Date(m.timestamp).toLocaleTimeString()}</Text>
-                </View>
+                  <Text style={styles.msgTime}>{new Date(m.timestamp).toLocaleTimeString()}{mine ? ' · hold to delete' : ''}</Text>
+                </Pressable>
               </View>
             );
           })}
@@ -300,7 +349,7 @@ export default function ChannelScreen() {
             onPressOut={stopRecording}
             style={[styles.pttBtn, recording && styles.pttBtnActive]}
           >
-            <Ionicons name={recording ? 'radio' : 'mic'} size={22}
+            <Icon name={recording ? 'radio' : 'mic'} size={22}
               color={recording ? T.colors.amber : T.colors.red} />
           </Pressable>
           <TextInput
@@ -318,7 +367,7 @@ export default function ChannelScreen() {
             onPress={sendText}
             style={[styles.sendBtn, (!input.trim() || sending) && { opacity: 0.4 }]}
           >
-            <Ionicons name="send" size={18} color={T.colors.bg} />
+            <Icon name="send" size={18} color={T.colors.bg} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>

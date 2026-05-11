@@ -6,7 +6,7 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../../components/Icon';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { theme, API } from '../../constants/theme';
 import Sparkline from '../../components/Sparkline';
@@ -65,7 +65,7 @@ export default function StockDetail() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="detail-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
+          <Icon name="chevron-back" size={24} color={theme.colors.text} />
         </Pressable>
         <Text style={styles.title}>{sym}</Text>
         <View style={{ width: 24 }} />

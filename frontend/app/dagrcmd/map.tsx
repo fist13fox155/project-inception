@@ -9,7 +9,7 @@ import {
   View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../../components/Icon';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -186,14 +186,14 @@ export default function DagrMapScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="map-back" style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={22} color={T.colors.textPrimary} />
+          <Icon name="chevron-back" size={22} color={T.colors.textPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.title}>TACTICAL MAP</Text>
           <Text style={styles.sub}>{pings.length} OPERATORS LIVE</Text>
         </View>
         <Pressable onPress={requestPos} testID="map-refresh" style={styles.iconBtn}>
-          <Ionicons name="locate" size={20} color={T.colors.amber} />
+          <Icon name="locate" size={20} color={T.colors.amber} />
         </Pressable>
       </View>
 

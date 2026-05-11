@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../../components/Icon';
 import { useRouter } from 'expo-router';
 import { theme, API } from '../../constants/theme';
 
@@ -82,19 +82,19 @@ export default function StocksBrowse() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} testID="browse-back" style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={22} color={theme.colors.text} />
+            <Icon name="chevron-back" size={22} color={theme.colors.text} />
           </Pressable>
           <View style={styles.headerCenter}>
             <Text style={styles.title}>BROWSE STOCKS</Text>
             <Text style={styles.subtitle}>{total.toLocaleString()} US TICKERS · {tracked.length} TRACKED</Text>
           </View>
           <Pressable onPress={clearAll} testID="browse-clear" style={styles.iconBtn}>
-            <Ionicons name="trash-outline" size={18} color={theme.colors.textTertiary} />
+            <Icon name="trash-outline" size={18} color={theme.colors.textTertiary} />
           </Pressable>
         </View>
 
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={16} color={theme.colors.textTertiary} />
+          <Icon name="search" size={16} color={theme.colors.textTertiary} />
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -129,8 +129,8 @@ export default function StocksBrowse() {
                 >
                   <View style={[styles.tickBox, sel && styles.tickBoxSel]}>
                     {sel
-                      ? <Ionicons name="checkmark" size={16} color={theme.colors.bg} />
-                      : <Ionicons name="add" size={16} color={theme.colors.textTertiary} />
+                      ? <Icon name="checkmark" size={16} color={theme.colors.bg} />
+                      : <Icon name="add" size={16} color={theme.colors.textTertiary} />
                     }
                   </View>
                   <View style={{ flex: 1 }}>

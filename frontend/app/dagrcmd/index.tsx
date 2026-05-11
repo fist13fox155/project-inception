@@ -7,7 +7,7 @@ import {
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../../components/Icon';
 import { useRouter } from 'expo-router';
 import { dagrTheme as T } from '../../constants/dagrTheme';
 import { API } from '../../constants/theme';
@@ -93,7 +93,7 @@ export default function DagrHome() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Pressable onPress={() => router.replace('/')} testID="dagr-exit" style={styles.iconBtn}>
-              <Ionicons name="chevron-back" size={22} color={T.colors.textPrimary} />
+              <Icon name="chevron-back" size={22} color={T.colors.textPrimary} />
             </Pressable>
             <Text style={styles.brand}>[ DAGRCMD ]</Text>
             <View style={{ width: 28 }} />
@@ -170,7 +170,7 @@ export default function DagrHome() {
           <Pressable onPress={submit} disabled={busy} style={[styles.submitBtn, busy && { opacity: 0.6 }]} testID="auth-submit">
             {busy ? <ActivityIndicator color={T.colors.bg} /> : (
               <>
-                <Ionicons name="shield-checkmark" size={18} color={T.colors.bg} />
+                <Icon name="shield-checkmark" size={18} color={T.colors.bg} />
                 <Text style={styles.submitText}>
                   {mode === 'login' ? 'OPEN SECURE CHANNEL' : 'GENERATE KEY · ENLIST'}
                 </Text>
@@ -179,7 +179,7 @@ export default function DagrHome() {
           </Pressable>
 
           <Pressable onPress={wipeIdentity} style={styles.wipeBtn} testID="wipe-btn">
-            <Ionicons name="trash-outline" size={14} color={T.colors.textMuted} />
+            <Icon name="trash-outline" size={14} color={T.colors.textMuted} />
             <Text style={styles.wipeText}>WIPE LOCAL IDENTITY</Text>
           </Pressable>
 
