@@ -46,11 +46,13 @@ export default function StocksBrowse() {
     })();
   }, [load]);
 
-  // Debounced search
+  // Debounced search — separate effect so the user doesn't get kicked back when typing.
   useEffect(() => {
-    const t = setTimeout(() => load(query), query ? 350 : 0);
-    return () => clearTimeout(t);
-  }, [query, load]);
+    if (!loading) {
+      const t = setTimeout(() => load(query), query ? 350 : 0);
+      return () => clearTimeout(t);
+    }
+  }, [query]);
 
   const persist = async (next: string[]) => {
     await fetch(`${API}/watchlist`, {

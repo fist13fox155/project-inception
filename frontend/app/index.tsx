@@ -42,7 +42,7 @@ export default function Home() {
       // Load user watchlist first
       const wRes = await fetch(`${API}/watchlist/${USER_ID}`);
       const wJson = await wRes.json();
-      const syms = (wJson.symbols && wJson.symbols.length ? wJson.symbols : DEFAULT_SYMBOLS).slice(0, 8);
+      const syms = (wJson.symbols && wJson.symbols.length ? wJson.symbols : DEFAULT_SYMBOLS).slice(0, 9);
       const r = await fetch(`${API}/stocks/quotes?symbols=${syms.join(',')}`);
       const j = await r.json();
       setQuotes(j.quotes || []);
@@ -101,35 +101,30 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Stock Tickers - horizontal scroll */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 4, gap: 4 }}
-          style={{ marginTop: 4 }}
-        >
-          {loading ? (
-            <View style={styles.loaderBox}>
-              <ActivityIndicator color={theme.colors.neon} />
-            </View>
-          ) : (
-            <>
-              {quotes.map((q) => (
-                <View key={q.symbol} style={{ width: 130 }}>
-                  <StockTickerCard quote={q} onPress={() => router.push(`/stock/${q.symbol}` as any)} />
-                </View>
-              ))}
+        {/* Stock Tickers - 3x3 grid */}
+        {loading ? (
+          <View style={styles.loaderBox}>
+            <ActivityIndicator color={theme.colors.neon} />
+          </View>
+        ) : (
+          <View style={styles.tickerGrid}>
+            {quotes.slice(0, 9).map((q) => (
+              <View key={q.symbol} style={styles.tickerCell}>
+                <StockTickerCard quote={q} onPress={() => router.push(`/stock/${q.symbol}` as any)} compact />
+              </View>
+            ))}
+            {quotes.length < 9 && (
               <Pressable
                 onPress={() => router.push('/stocks/browse' as any)}
-                style={styles.browseTile}
-                testID="browse-tile"
+                style={[styles.tickerCell, styles.addTile]}
+                testID="add-stock-tile"
               >
-                <Ionicons name="search" size={22} color={theme.colors.neon} />
-                <Text style={styles.browseTileText}>BROWSE{'\n'}30K+ STOCKS</Text>
+                <Ionicons name="add-circle-outline" size={26} color={theme.colors.neon} />
+                <Text style={styles.addTileText}>ADD STOCK</Text>
               </Pressable>
-            </>
-          )}
-        </ScrollView>
+            )}
+          </View>
+        )}
 
         {/* JARVIS Greeting */}
         <Pressable onPress={speakGreeting} style={styles.jarvisSection} testID="jarvis-greeting">
@@ -220,6 +215,16 @@ const styles = StyleSheet.create({
   },
   dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   tickerRow: { flexDirection: 'row', marginHorizontal: -4, marginTop: 4 },
+  tickerGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, marginHorizontal: -4,
+  },
+  tickerCell: { width: '33.333%', padding: 4 },
+  addTile: {
+    height: 80, alignItems: 'center', justifyContent: 'center', gap: 4,
+    backgroundColor: 'rgba(212,255,0,0.04)', borderWidth: 1, borderStyle: 'dashed',
+    borderColor: 'rgba(212,255,0,0.4)', borderRadius: theme.radius.md, marginHorizontal: 4,
+  },
+  addTileText: { color: theme.colors.neon, fontFamily: theme.fonts.bodyBold, fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
   loaderBox: { flex: 1, height: 84, alignItems: 'center', justifyContent: 'center', minWidth: 200 },
   browseTile: {
     width: 130, height: 84, marginHorizontal: 4,

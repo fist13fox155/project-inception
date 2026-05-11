@@ -324,23 +324,32 @@ class ValidateSymbol(BaseModel):
 
 @api.post("/stocks/validate")
 async def validate_symbol(s: ValidateSymbol):
-    """Check whether a ticker exists & is tradable via Finnhub."""
+    """Check whether a ticker exists via Finnhub quote OR catalog lookup."""
     sym = s.symbol.strip().upper()
     if not sym:
         return {"symbol": sym, "valid": False, "reason": "Empty"}
     if not FINNHUB_KEY:
         return {"symbol": sym, "valid": True, "reason": "no key (assume ok)"}
+    # 1) Try the quote endpoint
     try:
-        async with httpx.AsyncClient(timeout=10) as c:
+        async with httpx.AsyncClient(timeout=8) as c:
             r = await c.get("https://finnhub.io/api/v1/quote",
                             params={"symbol": sym, "token": FINNHUB_KEY})
-            r.raise_for_status()
-            q = r.json()
-        price = float(q.get("c") or 0)
-        return {"symbol": sym, "valid": price > 0, "price": price,
-                "reason": "OK" if price > 0 else "No price returned (likely invalid ticker)"}
-    except Exception as e:
-        return {"symbol": sym, "valid": False, "reason": str(e)}
+            if r.status_code == 200:
+                q = r.json()
+                price = float(q.get("c") or 0)
+                if price > 0:
+                    return {"symbol": sym, "valid": True, "price": price, "reason": "OK"}
+    except Exception:
+        pass
+    # 2) Fallback: check the cached symbol catalog (extended hours / new listings)
+    cache_key = "catalog:US"
+    cached = _av_cache.get(cache_key)
+    if cached:
+        for entry in cached.get("data", []):
+            if (entry.get("symbol") or "").upper() == sym:
+                return {"symbol": sym, "valid": True, "reason": "Listed (markets may be closed)"}
+    return {"symbol": sym, "valid": False, "reason": "Not found in US listings"}
 
 
 @api.get("/stocks/intraday/{symbol}")
