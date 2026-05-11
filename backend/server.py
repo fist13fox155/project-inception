@@ -84,6 +84,7 @@ JARVIS_SYSTEM = (
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    user_name: Optional[str] = None
 
 
 class ChatMessage(BaseModel):
@@ -975,6 +976,120 @@ async def set_watchlist(w: Watchlist):
         upsert=True,
     )
     return w.model_dump()
+
+
+# ==================================================================
+# COMMODITIES — Oil / Gas / Energy via Finnhub ETF proxies (real-time)
+# Maps consumer-friendly names to tradeable ETF/futures tickers Finnhub serves.
+# ==================================================================
+COMMODITY_MAP = [
+    {"key": "wti_oil",     "label": "WTI Crude Oil",      "unit": "bbl", "symbol": "USO",  "scale": 1.0,  "notes": "USO ETF tracks WTI futures"},
+    {"key": "brent_oil",   "label": "Brent Crude Oil",    "unit": "bbl", "symbol": "BNO",  "scale": 1.0,  "notes": "BNO ETF tracks Brent"},
+    {"key": "natural_gas", "label": "Natural Gas",        "unit": "MMBtu","symbol": "UNG", "scale": 1.0,  "notes": "UNG ETF tracks Henry Hub"},
+    {"key": "gasoline",    "label": "Gasoline (RBOB)",    "unit": "gal", "symbol": "UGA",  "scale": 1.0,  "notes": "UGA ETF tracks RBOB futures"},
+    {"key": "heating_oil", "label": "Heating Oil/Diesel", "unit": "gal", "symbol": "HEAT", "scale": 1.0,  "notes": "Heating oil proxy"},
+    {"key": "coal",        "label": "Coal (Thermal)",     "unit": "ton", "symbol": "KOL",  "scale": 1.0,  "notes": "Coal mining ETF proxy"},
+    {"key": "propane",     "label": "Propane",            "unit": "gal", "symbol": "AMLP", "scale": 0.20, "notes": "Propane via MLP basket proxy"},
+]
+
+# Major oil & energy stocks for the home page energy section
+ENERGY_TICKERS = ["XOM", "CVX", "BP", "SHEL", "COP", "OXY", "SLB", "EOG", "MPC", "PSX"]
+
+
+@api.get("/stocks/commodities")
+async def get_commodities():
+    """Real-time commodity prices via Finnhub ETF proxies."""
+    out = []
+    syms = list({c["symbol"] for c in COMMODITY_MAP})
+    quotes: Dict[str, dict] = {}
+    if FINNHUB_KEY:
+        async with httpx.AsyncClient(timeout=15) as c:
+            tasks = [
+                c.get("https://finnhub.io/api/v1/quote",
+                      params={"symbol": s, "token": FINNHUB_KEY})
+                for s in syms
+            ]
+            try:
+                import asyncio
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for s, r in zip(syms, results):
+                    if isinstance(r, Exception):
+                        continue
+                    try:
+                        j = r.json()
+                        price = float(j.get("c") or 0)
+                        if price:
+                            quotes[s] = {
+                                "price": price,
+                                "change": float(j.get("d") or 0),
+                                "change_pct": float(j.get("dp") or 0),
+                            }
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(f"commodities fetch: {e}")
+
+    for c in COMMODITY_MAP:
+        q = quotes.get(c["symbol"])
+        if not q:
+            continue
+        out.append({
+            "key": c["key"],
+            "label": c["label"],
+            "unit": c["unit"],
+            "symbol": c["symbol"],
+            "price": round(q["price"] * c["scale"], 2),
+            "change_pct": round(q["change_pct"], 2),
+            "notes": c["notes"],
+        })
+    return {"commodities": out, "energy_tickers": ENERGY_TICKERS}
+
+
+@api.get("/jarvis/market-brief")
+async def jarvis_market_brief(user_name: str = "Architect"):
+    """A single sentence of market insight - top mover, top gainer, etc."""
+    syms = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO", "XOM", "JPM"]
+    quotes = []
+    if FINNHUB_KEY:
+        async with httpx.AsyncClient(timeout=12) as c:
+            import asyncio
+            results = await asyncio.gather(*[
+                c.get("https://finnhub.io/api/v1/quote",
+                      params={"symbol": s, "token": FINNHUB_KEY}) for s in syms
+            ], return_exceptions=True)
+            for s, r in zip(syms, results):
+                if isinstance(r, Exception):
+                    continue
+                try:
+                    j = r.json()
+                    p = float(j.get("c") or 0)
+                    dp = float(j.get("dp") or 0)
+                    if p:
+                        quotes.append({"symbol": s, "price": p, "change_pct": dp})
+                except Exception:
+                    pass
+    if not quotes:
+        return {"brief": f"Markets are quiet, {user_name}. Standing by for your next move."}
+    quotes.sort(key=lambda x: abs(x["change_pct"]), reverse=True)
+    top = quotes[0]
+    direction = "surging" if top["change_pct"] > 0 else "sliding"
+    gainer = max(quotes, key=lambda x: x["change_pct"])
+    loser = min(quotes, key=lambda x: x["change_pct"])
+    company_names = {
+        "AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "Nvidia", "GOOGL": "Alphabet",
+        "AMZN": "Amazon", "META": "Meta", "TSLA": "Tesla", "AVGO": "Broadcom",
+        "XOM": "ExxonMobil", "JPM": "JPMorgan",
+    }
+    brief = (
+        f"Good day, {user_name}. {company_names.get(top['symbol'], top['symbol'])} is "
+        f"{direction} {abs(top['change_pct']):.1f} percent and leading the tape. "
+        f"Top gainer is {company_names.get(gainer['symbol'], gainer['symbol'])} at plus "
+        f"{gainer['change_pct']:.1f} percent. Worst performer is "
+        f"{company_names.get(loser['symbol'], loser['symbol'])} at {loser['change_pct']:.1f} percent. "
+        f"Stocks to watch this week: Nvidia, Apple, and ExxonMobil."
+    )
+    return {"brief": brief, "top": top, "gainer": gainer, "loser": loser}
+
 
 
 # ==================================================================

@@ -34,7 +34,7 @@ async function remove(key: string): Promise<void> {
 }
 
 export async function getVoice(): Promise<VoiceId> {
-  return ((await get(KEY_VOICE)) as VoiceId) || 'nova';
+  return ((await get(KEY_VOICE)) as VoiceId) || 'echo';
 }
 export async function setVoice(v: VoiceId) { await set(KEY_VOICE, v); }
 export async function getNarrate(): Promise<boolean> { return (await get(KEY_NARRATE)) === '1'; }
@@ -61,11 +61,11 @@ export async function clearInceptionAuth() {
 }
 
 export const VOICE_OPTIONS: { id: VoiceId; label: string; desc: string }[] = [
-  { id: 'system',  label: 'System TTS',    desc: 'Free · on-device · fast' },
-  { id: 'nova',    label: 'NOVA',          desc: 'Premium · warm female' },
-  { id: 'shimmer', label: 'SHIMMER',       desc: 'Premium · bright female' },
-  { id: 'alloy',   label: 'ALLOY',         desc: 'Premium · neutral' },
-  { id: 'echo',    label: 'ECHO',          desc: 'Premium · British male' },
-  { id: 'fable',   label: 'FABLE',         desc: 'Premium · storyteller' },
-  { id: 'onyx',    label: 'ONYX',          desc: 'Premium · deep male' },
+  { id: 'echo',    label: 'ECHO',          desc: 'Premium · Deep British male (JARVIS)' },
+  { id: 'onyx',    label: 'ONYX',          desc: 'Premium · Deep male' },
+  { id: 'fable',   label: 'FABLE',         desc: 'Premium · British storyteller' },
+  { id: 'alloy',   label: 'ALLOY',         desc: 'Premium · Neutral' },
+  { id: 'nova',    label: 'NOVA',          desc: 'Premium · Warm female' },
+  { id: 'shimmer', label: 'SHIMMER',       desc: 'Premium · Bright female' },
+  { id: 'system',  label: 'System (UK)',   desc: 'Free · On-device British English' },
 ];

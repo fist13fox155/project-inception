@@ -80,8 +80,11 @@ export default function ChatScreen() {
     setSpeakingId(m.id);
     const v = await getVoice();
     if (v === 'system') {
+      // System voice uses British English locale
       Speech.speak(m.content, {
-        rate: 0.97,
+        rate: 0.93,
+        pitch: 0.95,
+        language: 'en-GB',
         onDone: () => setSpeakingId(null),
         onStopped: () => setSpeakingId(null),
       });
@@ -108,7 +111,7 @@ export default function ChatScreen() {
     } catch (e) {
       console.warn('TTS playback failed', e);
       setSpeakingId(null);
-      Speech.speak(m.content, { rate: 0.97, onDone: () => setSpeakingId(null) });
+      Speech.speak(m.content, { rate: 0.93, pitch: 0.95, language: 'en-GB', onDone: () => setSpeakingId(null) });
     }
   };
 

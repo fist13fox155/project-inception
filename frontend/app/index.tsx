@@ -25,11 +25,12 @@ import JarvisOrb from '../components/JarvisOrb';
 import StockTickerCard, { Quote } from '../components/StockTickerCard';
 import EtherealOrbBackground from '../components/EtherealOrbBackground';
 import NewsTicker from '../components/NewsTicker';
+import CommoditiesStrip from '../components/CommoditiesStrip';
 import {
   isAuthenticated, getArchitectName, clearInceptionAuth, setSession,
 } from '../lib/prefs';
 
-const DEFAULT_SYMBOLS = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'AMZN'];
+const DEFAULT_SYMBOLS = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'XOM', 'CVX', 'BP'];
 const USER_ID = 'local-user';
 
 const ACTIONS = [
@@ -66,7 +67,7 @@ export default function Home() {
     try {
       const wRes = await fetch(`${API}/watchlist/${USER_ID}`);
       const wJson = await wRes.json();
-      const stored: string[] = (wJson.symbols && wJson.symbols.length ? wJson.symbols : DEFAULT_SYMBOLS).slice(0, 9);
+      const stored: string[] = (wJson.symbols && wJson.symbols.length ? wJson.symbols : DEFAULT_SYMBOLS);
 
       const r = await fetch(`${API}/stocks/quotes?symbols=${stored.join(',')}`);
       const j = await r.json();
@@ -97,8 +98,17 @@ export default function Home() {
       const dir = avg >= 0 ? 'up' : 'down';
       const hour = new Date().getHours();
       const tod = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+
+      // Pull a JARVIS market brief (top mover + top gainer + watchlist)
+      let brief = '';
+      try {
+        const b = await fetch(`${API}/jarvis/market-brief?user_name=${encodeURIComponent(architect)}`);
+        const bj = await b.json();
+        if (bj.brief) brief = `\n${bj.brief}`;
+      } catch {}
+
       setGreeting(
-        `Good ${tod} ${architect}.\nMarkets are ${dir} ${Math.abs(avg).toFixed(1)} percent today.\nReady to build your pitch deck?`
+        `Good ${tod} ${architect}.\nMarkets are ${dir} ${Math.abs(avg).toFixed(1)} percent today.${brief}`
       );
     } catch (e) {
       console.warn('fetch quotes', e);
@@ -116,7 +126,11 @@ export default function Home() {
   const speakGreeting = () => {
     Speech.stop();
     if (!voiceMode) {
-      Speech.speak(greeting.replace(/\n/g, '. '), { rate: 0.95, pitch: 1.0 });
+      Speech.speak(greeting.replace(/\n/g, '. '), {
+        rate: 0.9, pitch: 0.95, language: 'en-GB',
+        onDone: () => setVoiceMode(false),
+        onStopped: () => setVoiceMode(false),
+      });
       setVoiceMode(true);
     } else {
       setVoiceMode(false);
@@ -150,7 +164,7 @@ export default function Home() {
             <Icon name="globe-outline" size={22} color={theme.colors.blue} />
             <Text style={styles.logoText}>PROJECT INCEPTION</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Pressable
               onPress={() => router.push('/dagrcmd')}
               testID="open-dagrcmd"
@@ -159,12 +173,9 @@ export default function Home() {
               <Icon name="shield-half" size={11} color="#FF3333" />
               <Text style={styles.dagrText}>DAGRCMD</Text>
             </Pressable>
-            <View style={styles.liveBadge} testID="live-indicator">
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>LIVE</Text>
-            </View>
-            <Pressable onPress={logout} testID="logout" style={styles.iconBtnSmall}>
-              <Icon name="log-out-outline" size={14} color={theme.colors.textTertiary} />
+            <Pressable onPress={logout} testID="logout" style={styles.logoutBtn}>
+              <Icon name="log-out-outline" size={12} color={theme.colors.blue} />
+              <Text style={styles.logoutText}>LOGOUT</Text>
             </Pressable>
           </View>
         </View>
@@ -179,25 +190,26 @@ export default function Home() {
           </View>
         ) : (
           <View style={styles.tickerGrid}>
-            {quotes.slice(0, 9).map((q) => (
+            {quotes.map((q) => (
               <View key={q.symbol} style={styles.tickerCell}>
                 <StockTickerCard quote={q} onPress={() => router.push(`/stock/${q.symbol}` as any)} compact />
               </View>
             ))}
-            {quotes.length < 9 && (
-              <Pressable
-                onPress={() => router.push('/stocks/browse' as any)}
-                style={[styles.tickerCell, styles.addTileWrap]}
-                testID="add-stock-tile"
-              >
-                <View style={styles.addTile}>
-                  <Icon name="add-circle-outline" size={26} color={theme.colors.blue} />
-                  <Text style={styles.addTileText}>ADD STOCK</Text>
-                </View>
-              </Pressable>
-            )}
+            <Pressable
+              onPress={() => router.push('/stocks/browse' as any)}
+              style={[styles.tickerCell, styles.addTileWrap]}
+              testID="add-stock-tile"
+            >
+              <View style={styles.addTile}>
+                <Icon name="add-circle-outline" size={26} color={theme.colors.blue} />
+                <Text style={styles.addTileText}>ADD STOCK</Text>
+              </View>
+            </Pressable>
           </View>
         )}
+
+        {/* Energy & Commodities */}
+        <CommoditiesStrip />
 
         {/* JARVIS Greeting */}
         <Pressable onPress={speakGreeting} style={styles.jarvisSection} testID="jarvis-greeting">
@@ -287,6 +299,14 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,51,51,0.35)',
   },
   dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
+  logoutBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: theme.radius.full,
+    backgroundColor: 'rgba(0,229,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(0,229,255,0.35)',
+  },
+  logoutText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   iconBtnSmall: { padding: 4 },
   tickerGrid: {
     flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, marginHorizontal: -4,

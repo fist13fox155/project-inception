@@ -11,8 +11,13 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Speak commands to JARVIS",
-        "NSSpeechRecognitionUsageDescription": "Transcribe your voice commands"
+        "NSMicrophoneUsageDescription": "Talk to JARVIS and send voice transmissions",
+        "NSSpeechRecognitionUsageDescription": "Transcribe your voice commands",
+        "NSPhotoLibraryUsageDescription": "Send photos and videos in encrypted comms",
+        "NSPhotoLibraryAddUsageDescription": "Save received media",
+        "NSCameraUsageDescription": "Capture photos and videos in comms",
+        "NSLocationWhenInUseUsageDescription": "Pin your position on the tactical map",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Pin your position on the tactical map"
       }
     },
     "android": {
@@ -22,7 +27,15 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -42,7 +55,20 @@
         }
       ],
       "expo-secure-store",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Send photos and videos in encrypted comms",
+          "cameraPermission": "Capture photos and videos in comms"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Pin your position on the tactical map"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
