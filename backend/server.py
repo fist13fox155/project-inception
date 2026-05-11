@@ -421,25 +421,45 @@ async def _ai_outline(prompt: str, fmt: str) -> dict:
     instructions = (
         f"Build content based on this user prompt:\n\"\"\"{prompt}\"\"\"\n\n"
         f"{fmt_hint}\n\n"
-        "Return ONLY valid minified JSON (no markdown fences). Schema:\n"
+        "CRITICAL: Return ONLY valid minified JSON (no markdown fences). "
+        "Inside string values, use only straight ASCII quotes and escape any internal double quotes with backslash. "
+        "Avoid smart/curly quotes and avoid apostrophes that would break parsing. Schema:\n"
         '{"title":"...","subtitle":"...",'
-        '"slides":[{"title":"...","bullets":["..."]}] ,'  # for pptx
-        '"sections":[{"heading":"...","paragraphs":["..."]}],'  # for pdf
+        '"slides":[{"title":"...","bullets":["..."]}] ,'
+        '"sections":[{"heading":"...","paragraphs":["..."]}],'
         '"summary":"..."}'
     )
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"doc-{uuid.uuid4().hex[:8]}",
-        system_message="You are JARVIS, a precise content architect. Return only valid JSON.",
-    ).with_model("anthropic", CLAUDE_MODEL)
-    reply = await chat.send_message(UserMessage(text=instructions))
-    match = re.search(r"\{.*\}", reply, re.S)
-    if not match:
-        raise HTTPException(500, "AI did not return JSON outline")
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError as e:
-        raise HTTPException(500, f"Bad outline JSON: {e}")
+
+    def _smart_quote_normalize(s: str) -> str:
+        return (
+            s.replace("\u2018", "'").replace("\u2019", "'")
+             .replace("\u201c", '"').replace("\u201d", '"')
+             .replace("\u2013", "-").replace("\u2014", "-")
+        )
+
+    last_err = None
+    for attempt in range(3):
+        try:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"doc-{uuid.uuid4().hex[:8]}",
+                system_message="You are JARVIS, a precise content architect. Return only valid JSON. Never use smart quotes.",
+            ).with_model("anthropic", CLAUDE_MODEL)
+            reply = await chat.send_message(UserMessage(text=instructions))
+            reply = _smart_quote_normalize(reply)
+            match = re.search(r"\{.*\}", reply, re.S)
+            if not match:
+                raise ValueError("No JSON found")
+            return json.loads(match.group(0))
+        except json.JSONDecodeError as e:
+            last_err = e
+            logger.warning(f"outline JSON parse failed attempt {attempt+1}: {e}")
+            continue
+        except Exception as e:
+            last_err = e
+            logger.warning(f"outline gen failed attempt {attempt+1}: {e}")
+            continue
+    raise HTTPException(500, f"Could not generate clean outline after 3 tries: {last_err}")
 
 
 def _build_pdf(outline: dict) -> bytes:
