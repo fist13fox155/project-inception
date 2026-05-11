@@ -6,7 +6,7 @@
  * - Personalized greeting using Architect name
  * - Live news ticker (stocks + crisis headlines)
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
 import { theme, API } from '../constants/theme';
 import JarvisOrb from '../components/JarvisOrb';
 import StockTickerCard, { Quote } from '../components/StockTickerCard';
@@ -27,7 +29,7 @@ import EtherealOrbBackground from '../components/EtherealOrbBackground';
 import NewsTicker from '../components/NewsTicker';
 import CommoditiesStrip from '../components/CommoditiesStrip';
 import {
-  isAuthenticated, getArchitectName, clearInceptionAuth, setSession,
+  isAuthenticated, getArchitectName, clearInceptionAuth, setSession, getVoice,
 } from '../lib/prefs';
 
 const DEFAULT_SYMBOLS = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'XOM', 'CVX', 'BP'];
@@ -48,6 +50,8 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [greeting, setGreeting] = useState('Standing by.');
   const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   // AUTH GATE
   useEffect(() => {
@@ -212,15 +216,26 @@ export default function Home() {
         <CommoditiesStrip />
 
         {/* JARVIS Greeting */}
-        <Pressable onPress={speakGreeting} style={styles.jarvisSection} testID="jarvis-greeting">
+        <Pressable
+          onPress={speakGreeting}
+          disabled={voiceBusy}
+          style={[styles.jarvisSection, voiceBusy && { opacity: 0.85 }]}
+          testID="jarvis-greeting"
+        >
           <JarvisOrb size={110} color={theme.colors.blue} speaking={voiceMode} />
           <View style={styles.bubble}>
             <View style={styles.bubbleTail} />
             <Text style={styles.jarvisLabel}>JARVIS</Text>
             <Text style={styles.bubbleText}>{greeting}</Text>
             <View style={styles.bubbleActions}>
-              <Icon name={voiceMode ? 'volume-high' : 'volume-mute'} size={14} color={theme.colors.blue} />
-              <Text style={styles.bubbleHint}>{voiceMode ? 'NARRATING' : 'TAP TO HEAR'}</Text>
+              {voiceBusy && !voiceMode ? (
+                <ActivityIndicator size="small" color={theme.colors.blue} />
+              ) : (
+                <Icon name={voiceMode ? 'volume-high' : 'volume-mute'} size={14} color={theme.colors.blue} />
+              )}
+              <Text style={styles.bubbleHint}>
+                {voiceBusy && !voiceMode ? 'CONNECTING…' : voiceMode ? 'NARRATING · TAP TO STOP' : 'TAP FOR BRITISH NARRATION'}
+              </Text>
             </View>
           </View>
         </Pressable>

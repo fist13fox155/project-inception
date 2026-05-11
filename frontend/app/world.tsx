@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
+import CommoditiesStrip from '../components/CommoditiesStrip';
 import { theme, API } from '../constants/theme';
 
 type CrisisItem = {

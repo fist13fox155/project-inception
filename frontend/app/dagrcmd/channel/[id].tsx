@@ -379,8 +379,22 @@ export default function ChannelScreen() {
             <Text style={styles.statusMeta}> · {officers.length} OPS</Text>
           </View>
         </View>
-        <Pressable onPress={liveCallOn ? stopLiveCall : startLiveCall} style={styles.iconBtn} testID="call-btn">
-          <Icon name={liveCallOn ? 'close' : 'radio'} size={20} color={liveCallOn ? T.colors.red : T.colors.green} />
+        <Pressable
+          onPress={liveCallOn ? stopLiveCall : startLiveCall}
+          style={[styles.callBtn, liveCallOn && styles.callBtnEnd]}
+          testID="call-btn"
+        >
+          <Icon name={liveCallOn ? 'close' : 'radio'} size={18} color={T.colors.bg} />
+          <Text style={[styles.callBtnText, liveCallOn && { color: T.colors.bg }]}>
+            {liveCallOn ? 'END' : 'CALL'}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push(`/dagrcmd/video?ch=${channel.id}` as any)}
+          style={styles.videoCallBtn}
+          testID="video-call-btn"
+        >
+          <Icon name="play-circle" size={18} color="#fff" />
         </Pressable>
         <Pressable onPress={sendLocation} style={styles.iconBtn} testID="loc-btn">
           <Icon name="locate" size={20} color={T.colors.amber} />
@@ -390,7 +404,7 @@ export default function ChannelScreen() {
       {liveCallOn && (
         <View style={styles.callBar} testID="live-call-bar">
           <View style={styles.callDot} />
-          <Text style={styles.callBarText}>LIVE CALL · BROADCASTING · TAP × TO END</Text>
+          <Text style={styles.callBarText}>📞 LIVE AUDIO CALL · BROADCASTING ENCRYPTED · TAP "END" TO HANG UP</Text>
         </View>
       )}
 
@@ -539,6 +553,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: T.colors.border,
   },
   iconBtn: { padding: 6 },
+  callBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: T.colors.green,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: T.radius.full,
+  },
+  callBtnEnd: { backgroundColor: T.colors.red },
+  callBtnText: { color: T.colors.bg, fontFamily: T.fonts.bodyBold, fontSize: 11, letterSpacing: 1.5 },
+  videoCallBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: T.colors.blue,
+    alignItems: 'center', justifyContent: 'center',
+  },
   headerCenter: { alignItems: 'center', flex: 1 },
   title: { color: T.colors.red, fontFamily: T.fonts.heading, fontSize: 16, letterSpacing: 2 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
