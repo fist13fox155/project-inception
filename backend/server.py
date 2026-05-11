@@ -1443,6 +1443,7 @@ async def join_landing(code: str):
     chan_owner = (chan or {}).get("owner", "—")
     members = len((chan or {}).get("members", [])) if chan else 0
     app_url = "https://inception-ai-gen.preview.emergentagent.com"
+    join_url = f"{app_url}/dagrcmd?invite={code_safe}"
     html = f"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -1502,11 +1503,11 @@ async def join_landing(code: str):
       <a href="https://apps.apple.com/app/expo-go/id982107779">iOS App Store</a><br>
       <a href="https://play.google.com/store/apps/details?id=host.exp.exponent">Google Play</a></p></div>
     <div class="row"><div class="num">2</div><p>Open <b>Expo Go</b> and scan the QR or enter:<br><a href="{app_url}">{app_url}</a></p></div>
-    <div class="row"><div class="num">3</div><p>Tap the red <b>DAGRCMD</b> chip on the home screen, then <b>ENLIST</b> (or AUTHENTICATE if you already have a callsign).</p></div>
-    <div class="row"><div class="num">4</div><p>Inside COMMS, tap <b>JOIN BY CODE</b> and paste:<br><b style="color:#FF4444;font-family:monospace;font-size:18px;letter-spacing:3px">{code_safe}</b></p></div>
+    <div class="row"><div class="num">3</div><p>Tap the red <b>DAGRCMD</b> chip on the home screen — the invite is pre-loaded — then tap <b>ENLIST</b>.</p></div>
+    <div class="row"><div class="num">4</div><p>Or if the auto-link fails, in COMMS tap <b>JOIN BY CODE</b> and paste:<br><b style="color:#FF4444;font-family:monospace;font-size:18px;letter-spacing:3px">{code_safe}</b></p></div>
   </div>
 
-  <a class="btn" href="{app_url}">OPEN DAGRCMD</a>
+  <a class="btn" href="{join_url}">OPEN DAGRCMD WITH INVITE</a>
   <p class="small">END-TO-END ENCRYPTED · X25519 · NACL BOX</p>
 </div>
 </body></html>"""

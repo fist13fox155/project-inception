@@ -8,31 +8,68 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../../components/Icon';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { dagrTheme as T } from '../../constants/dagrTheme';
 import { API } from '../../constants/theme';
 import {
   ensureKeyPair, storeCredentials, getCredentials, clearIdentity,
 } from '../../lib/crypto';
 
+const INVITE_KEY = 'dagr_pending_invite';
+
+async function stashInvite(code: string) {
+  try {
+    if (Platform.OS === 'web') globalThis.localStorage?.setItem(INVITE_KEY, code);
+    else {
+      const SS = await import('expo-secure-store');
+      await SS.setItemAsync(INVITE_KEY, code);
+    }
+  } catch {}
+}
+async function readInvite(): Promise<string> {
+  try {
+    if (Platform.OS === 'web') return globalThis.localStorage?.getItem(INVITE_KEY) || '';
+    const SS = await import('expo-secure-store');
+    return (await SS.getItemAsync(INVITE_KEY)) || '';
+  } catch { return ''; }
+}
+async function clearInvite() {
+  try {
+    if (Platform.OS === 'web') globalThis.localStorage?.removeItem(INVITE_KEY);
+    else {
+      const SS = await import('expo-secure-store');
+      await SS.deleteItemAsync(INVITE_KEY);
+    }
+  } catch {}
+}
+
 export default function DagrHome() {
   const router = useRouter();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const params = useLocalSearchParams<{ invite?: string }>();
+  const [mode, setMode] = useState<'login' | 'register'>('register');
   const [callsign, setCallsign] = useState('');
   const [authCode, setAuthCode] = useState('');
   const [rank, setRank] = useState('OPERATOR');
   const [unit, setUnit] = useState('');
   const [busy, setBusy] = useState(false);
   const [restored, setRestored] = useState(false);
+  const [pendingInvite, setPendingInvite] = useState('');
 
   useEffect(() => {
     (async () => {
+      // Accept invite from URL param OR a previously stashed code
+      const fromUrl = (params.invite || '').toString().toUpperCase().trim();
+      if (fromUrl) await stashInvite(fromUrl);
+      const stashed = fromUrl || (await readInvite());
+      if (stashed) setPendingInvite(stashed);
+
       const { callsign: cs, authCode: ac } = await getCredentials();
       if (cs && ac) {
         setCallsign(cs); setAuthCode(ac); setRestored(true);
+        setMode('login');
       }
     })();
-  }, []);
+  }, [params.invite]);
 
   const submit = async () => {
     const cs = callsign.trim().toUpperCase();
@@ -42,7 +79,17 @@ export default function DagrHome() {
     }
     setBusy(true);
     try {
-      const kp = await ensureKeyPair();
+      // Generate / load keypair — this used to silently fail on web/secure-store
+      let kp;
+      try {
+        kp = await ensureKeyPair();
+      } catch (e: any) {
+        throw new Error('Could not generate encryption key. ' + (e?.message || ''));
+      }
+      if (!kp.publicKey || !kp.secretKey) {
+        throw new Error('Empty key pair returned. PRNG failure?');
+      }
+
       const url = mode === 'register'
         ? `${API}/dagrcmd/officers/register`
         : `${API}/dagrcmd/officers/login`;
@@ -70,6 +117,29 @@ export default function DagrHome() {
         });
       }
       await storeCredentials(cs, authCode);
+
+      // Auto-consume any pending invite code
+      const inviteCode = pendingInvite || (await readInvite());
+      if (inviteCode) {
+        try {
+          const jr = await fetch(`${API}/dagrcmd/channels/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callsign: cs, auth_code: authCode, join_code: inviteCode }),
+          });
+          if (jr.ok) {
+            await clearInvite();
+            const jj = await jr.json();
+            const chId = (jj.channel || jj).id;
+            if (chId) {
+              router.replace(`/dagrcmd/channel/${chId}` as any);
+              return;
+            }
+          } else {
+            Alert.alert('Invite invalid', `Could not join with code ${inviteCode}. You can enter it manually in COMMS.`);
+          }
+        } catch {}
+      }
       router.replace('/dagrcmd/comms');
     } catch (e: any) {
       Alert.alert('Auth failed', String(e?.message || e));
@@ -119,6 +189,19 @@ export default function DagrHome() {
               </Pressable>
             ))}
           </View>
+
+          {pendingInvite ? (
+            <View style={styles.inviteBanner} testID="invite-banner">
+              <Icon name="enter-outline" size={16} color={T.colors.amber} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inviteTitle}>INVITE PENDING</Text>
+                <Text style={styles.inviteCode}>CODE · {pendingInvite}</Text>
+                <Text style={styles.inviteHint}>
+                  ENLIST below to auto-join this channel.
+                </Text>
+              </View>
+            </View>
+          ) : null}
 
           {restored && (
             <Text style={styles.hint}>Credentials restored from secure store. Tap AUTHENTICATE.</Text>
@@ -245,4 +328,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: T.colors.border,
   },
   disclaimerText: { color: T.colors.textMuted, fontFamily: T.fonts.body, fontSize: 11, lineHeight: 16 },
+  inviteBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(255,196,0,0.08)',
+    borderWidth: 1, borderColor: T.colors.amber,
+    borderRadius: T.radius.sm,
+    paddingHorizontal: 12, paddingVertical: 10,
+    marginBottom: 12,
+  },
+  inviteTitle: { color: T.colors.amber, fontFamily: T.fonts.heading, fontSize: 11, letterSpacing: 2 },
+  inviteCode: { color: T.colors.amber, fontFamily: T.fonts.mono, fontSize: 18, letterSpacing: 4, marginTop: 2 },
+  inviteHint: { color: T.colors.textMuted, fontFamily: T.fonts.body, fontSize: 11, marginTop: 2 },
 });
