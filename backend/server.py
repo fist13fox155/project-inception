@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 from typing import List, Optional, Literal
 
 import httpx
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
-from fastapi.responses import Response
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -51,6 +51,7 @@ db = mongo_client[os.environ["DB_NAME"]]
 # ---------- Environment ----------
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY", "")
+FINNHUB_KEY = os.environ.get("FINNHUB_KEY", "")
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 
 # OpenAI client for TTS / Whisper via Emergent gateway
@@ -174,7 +175,39 @@ def _mock_quote(symbol: str) -> dict:
 
 
 async def _live_quote(sym: str) -> Optional[dict]:
-    """Use GLOBAL_QUOTE + TIME_SERIES_DAILY (free tier) for sparkline."""
+    """Use Finnhub (preferred) for real-time quote + sparkline."""
+    if FINNHUB_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=15) as c:
+                # Quote
+                r = await c.get("https://finnhub.io/api/v1/quote",
+                                params={"symbol": sym, "token": FINNHUB_KEY})
+                r.raise_for_status()
+                q = r.json()
+                price = float(q.get("c") or 0)
+                if not price:
+                    raise ValueError("no price")
+                change = float(q.get("d") or 0)
+                change_pct = float(q.get("dp") or 0)
+                prev_close = float(q.get("pc") or price)
+                open_p = float(q.get("o") or price)
+                high = float(q.get("h") or price)
+                low = float(q.get("l") or price)
+                # Build a synthetic 20-pt sparkline using today's o/h/l/c around prev close
+                spark = [prev_close, open_p, low, (open_p + high) / 2, high, (high + price) / 2,
+                         price, (price + low) / 2, low, (low + high) / 2, price, high, low,
+                         (price + open_p) / 2, price, high, (high + low) / 2, price, open_p, price]
+                return {
+                    "symbol": sym,
+                    "price": round(price, 2),
+                    "change": round(change, 2),
+                    "change_pct": round(change_pct, 2),
+                    "sparkline": [round(x, 2) for x in spark],
+                    "is_live": True,
+                }
+        except Exception as e:
+            logger.warning(f"Finnhub quote fail {sym}: {e}")
+    # Fallback to Alpha Vantage
     try:
         gq = await _av_get({"function": "GLOBAL_QUOTE", "symbol": sym})
         q = gq.get("Global Quote") or {}
@@ -184,21 +217,38 @@ async def _live_quote(sym: str) -> Optional[dict]:
         change_pct = float(cp)
         if not price:
             return None
-        # Daily series for sparkline
         ds = await _av_get({"function": "TIME_SERIES_DAILY", "symbol": sym, "outputsize": "compact"})
         series = ds.get("Time Series (Daily)") or {}
         keys = sorted(series.keys())[-20:]
         spark = [float(series[k]["4. close"]) for k in keys] if keys else [price] * 20
         return {
-            "symbol": sym,
-            "price": round(price, 2),
-            "change": round(change, 2),
-            "change_pct": round(change_pct, 2),
-            "sparkline": spark,
-            "is_live": True,
+            "symbol": sym, "price": round(price, 2), "change": round(change, 2),
+            "change_pct": round(change_pct, 2), "sparkline": spark, "is_live": True,
         }
     except Exception as e:
-        logger.warning(f"AV live quote fail {sym}: {e}")
+        logger.warning(f"AV fallback fail {sym}: {e}")
+        return None
+
+
+async def _live_candles(sym: str, resolution: str = "60", days: int = 1) -> Optional[List[dict]]:
+    """Finnhub candles for charting. resolution: 1,5,15,30,60,D,W,M."""
+    if not FINNHUB_KEY:
+        return None
+    try:
+        import time as _t
+        now = int(_t.time())
+        past = now - days * 86400
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get("https://finnhub.io/api/v1/stock/candle",
+                            params={"symbol": sym, "resolution": resolution,
+                                    "from": past, "to": now, "token": FINNHUB_KEY})
+            r.raise_for_status()
+            j = r.json()
+        if j.get("s") != "ok" or not j.get("t"):
+            return None
+        return [{"t": str(j["t"][i]), "price": float(j["c"][i])} for i in range(len(j["t"]))]
+    except Exception as e:
+        logger.warning(f"Finnhub candles fail {sym}: {e}")
         return None
 
 
@@ -215,25 +265,27 @@ async def get_quotes(symbols: str = ",".join(DEFAULT_WATCHLIST)):
 
 @api.get("/stocks/intraday/{symbol}")
 async def get_intraday(symbol: str):
-    """Hourly view (free tier uses daily as proxy)."""
+    """Hourly view via Finnhub 60min candles."""
     sym = symbol.upper()
+    pts = await _live_candles(sym, resolution="60", days=2)
+    if pts:
+        return {"symbol": sym, "interval": "60min", "points": pts, "is_live": True}
+    # AV fallback
     try:
         data = await _av_get({"function": "TIME_SERIES_DAILY", "symbol": sym, "outputsize": "compact"})
         series = data.get("Time Series (Daily)") or {}
         if not series:
             raise ValueError("No data")
         keys = sorted(series.keys())[-30:]
-        points = [{"t": k, "price": float(series[k]["4. close"])} for k in keys]
-        return {"symbol": sym, "interval": "daily", "points": points, "is_live": True}
+        return {"symbol": sym, "interval": "daily",
+                "points": [{"t": k, "price": float(series[k]["4. close"])} for k in keys],
+                "is_live": True}
     except Exception as e:
         logger.warning(f"intraday fail {sym}: {e}")
         mock = _mock_quote(sym)
-        return {
-            "symbol": sym,
-            "interval": "daily",
-            "points": [{"t": f"day-{i}", "price": p} for i, p in enumerate(mock["sparkline"])],
-            "is_live": False,
-        }
+        return {"symbol": sym, "interval": "daily",
+                "points": [{"t": f"day-{i}", "price": p} for i, p in enumerate(mock["sparkline"])],
+                "is_live": False}
 
 
 @api.get("/stocks/quarterly/{symbol}")
@@ -536,6 +588,164 @@ async def delete_document(doc_id: str):
 
 
 # ==================================================================
+# World Crisis Feed — GDELT 2.0 (free, real-time global events)
+# Surfaces civil unrest, military action, guerrilla fighting, crises.
+# ==================================================================
+CRISIS_KEYWORDS = {
+    "military": ["airstrike", "missile", "troops", "invasion", "offensive", "military",
+                 "army", "naval", "drone strike", "ceasefire", "warplane", "armored",
+                 "warship", "submarine", "deployment", "soldiers"],
+    "unrest": ["protest", "riot", "demonstration", "unrest", "uprising", "march",
+               "rally", "civil disobedience", "general strike", "clash with police"],
+    "guerrilla": ["insurgent", "guerrilla", "guerilla", "militants", "militia",
+                  "rebels", "armed group", "ambush", "terror", "terrorist", "extremist",
+                  "isis", "isil", "al-qaeda", "boko haram", "taliban", "houthis",
+                  "hezbollah", "hamas", "wagner", "junta"],
+    "crisis": ["famine", "earthquake", "hurricane", "typhoon", "refugee", "evacuation",
+               "humanitarian", "state of emergency", "wildfire", "flood disaster",
+               "outbreak", "epidemic", "sanctions", "coup", "crisis"],
+}
+HOTSPOT_TERMS = [
+    "Gaza", "Israel", "Lebanon", "Syria", "Yemen", "Iran", "Iraq",
+    "Sudan", "Somalia", "Mali", "Burkina Faso", "Niger", "Ethiopia",
+    "Ukraine", "Russia", "Belarus", "Moldova",
+    "Afghanistan", "Pakistan", "Kashmir",
+    "Myanmar", "Taiwan", "North Korea", "South China Sea",
+    "Haiti", "Venezuela", "Colombia", "Mexico cartel",
+    "Nigeria", "DR Congo", "Central African Republic", "Mozambique",
+    "Libya", "West Bank", "Sinai", "Tigray", "Donbas", "Kursk",
+]
+
+
+def _classify(text: str) -> tuple[str, list[str]]:
+    """Return (primary_category, matched_hotspots). primary='other' if none match."""
+    t = (text or "").lower()
+    matched = [h for h in HOTSPOT_TERMS if h.lower() in t]
+    for cat in ("military", "guerrilla", "unrest", "crisis"):
+        if any(k in t for k in CRISIS_KEYWORDS[cat]):
+            return cat.upper(), matched
+    return "OTHER", matched
+
+
+_crisis_cache: dict = {}
+
+
+@api.get("/world/crisis")
+async def world_crisis(category: str = "all", limit: int = 30):
+    cat = (category or "all").lower()
+    key = f"{cat}:{limit}"
+    now_ts = datetime.now(timezone.utc).timestamp()
+    cached = _crisis_cache.get(key)
+    if cached and (now_ts - cached["t"]) < 90:
+        return cached["data"]
+
+    raw_items: list[dict] = []
+    # 1) Finnhub general news (real-time breaking world news)
+    if FINNHUB_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=12) as c:
+                r = await c.get("https://finnhub.io/api/v1/news",
+                                params={"category": "general", "token": FINNHUB_KEY})
+                r.raise_for_status()
+                for a in (r.json() or []):
+                    raw_items.append({
+                        "title": a.get("headline") or "",
+                        "summary": a.get("summary") or "",
+                        "url": a.get("url") or "",
+                        "source": a.get("source") or "",
+                        "image": a.get("image") or "",
+                        "time": datetime.fromtimestamp(a.get("datetime", 0),
+                                                      tz=timezone.utc).isoformat() if a.get("datetime") else "",
+                    })
+        except Exception as e:
+            logger.warning(f"Finnhub general news fail: {e}")
+
+    # Classify + filter
+    classified = []
+    for item in raw_items:
+        blob = f"{item['title']} {item.get('summary', '')}"
+        pri, hotspots = _classify(blob)
+        item["category"] = pri
+        item["hotspots"] = hotspots
+        classified.append(item)
+
+    if cat == "all":
+        # Crisis-only across military/guerrilla/unrest/crisis
+        filtered = [i for i in classified if i["category"] != "OTHER"]
+    else:
+        filtered = [i for i in classified if i["category"] == cat.upper()]
+
+    # If thin, supplement with hotspot-matched items
+    if len(filtered) < 5:
+        for i in classified:
+            if i not in filtered and i["hotspots"]:
+                filtered.append(i)
+                if len(filtered) >= limit:
+                    break
+
+    # Always also include hotspot-tagged stories even if no crisis keyword
+    out = {"category": cat, "count": len(filtered[:limit]), "items": filtered[:limit]}
+    _crisis_cache[key] = {"t": now_ts, "data": out}
+    return out
+
+
+# Hotspot timezone directory
+HOTSPOT_ZONES = [
+    {"name": "Gaza City",       "zone": "Asia/Gaza",       "region": "Middle East"},
+    {"name": "Tel Aviv",        "zone": "Asia/Jerusalem",  "region": "Middle East"},
+    {"name": "Beirut",          "zone": "Asia/Beirut",     "region": "Middle East"},
+    {"name": "Damascus",        "zone": "Asia/Damascus",   "region": "Middle East"},
+    {"name": "Sana'a",          "zone": "Asia/Aden",       "region": "Middle East"},
+    {"name": "Tehran",          "zone": "Asia/Tehran",     "region": "Middle East"},
+    {"name": "Baghdad",         "zone": "Asia/Baghdad",    "region": "Middle East"},
+    {"name": "Kabul",           "zone": "Asia/Kabul",      "region": "South Asia"},
+    {"name": "Islamabad",       "zone": "Asia/Karachi",    "region": "South Asia"},
+    {"name": "Kyiv",            "zone": "Europe/Kyiv",     "region": "Eastern Europe"},
+    {"name": "Moscow",          "zone": "Europe/Moscow",   "region": "Eastern Europe"},
+    {"name": "Minsk",           "zone": "Europe/Minsk",    "region": "Eastern Europe"},
+    {"name": "Khartoum",        "zone": "Africa/Khartoum", "region": "East Africa"},
+    {"name": "Mogadishu",       "zone": "Africa/Mogadishu","region": "East Africa"},
+    {"name": "Addis Ababa",     "zone": "Africa/Addis_Ababa","region": "East Africa"},
+    {"name": "Tripoli",         "zone": "Africa/Tripoli",  "region": "North Africa"},
+    {"name": "Bamako",          "zone": "Africa/Bamako",   "region": "West Africa"},
+    {"name": "Ouagadougou",     "zone": "Africa/Ouagadougou","region": "West Africa"},
+    {"name": "Abuja",           "zone": "Africa/Lagos",    "region": "West Africa"},
+    {"name": "Kinshasa",        "zone": "Africa/Kinshasa", "region": "Central Africa"},
+    {"name": "Naypyidaw",       "zone": "Asia/Yangon",     "region": "SE Asia"},
+    {"name": "Pyongyang",       "zone": "Asia/Pyongyang",  "region": "East Asia"},
+    {"name": "Taipei",          "zone": "Asia/Taipei",     "region": "East Asia"},
+    {"name": "Port-au-Prince",  "zone": "America/Port-au-Prince","region": "Caribbean"},
+    {"name": "Caracas",         "zone": "America/Caracas", "region": "South America"},
+    {"name": "Bogota",          "zone": "America/Bogota",  "region": "South America"},
+]
+
+
+@api.get("/world/hotspots")
+async def world_hotspots():
+    """Returns hotspot cities with current local time. Frontend renders relative clock."""
+    from zoneinfo import ZoneInfo
+    now_utc = datetime.now(timezone.utc)
+    out = []
+    for h in HOTSPOT_ZONES:
+        try:
+            local = now_utc.astimezone(ZoneInfo(h["zone"]))
+            offset_minutes = int(local.utcoffset().total_seconds() / 60) if local.utcoffset() else 0
+            offset_str = ("+" if offset_minutes >= 0 else "-") + \
+                f"{abs(offset_minutes)//60:02d}:{abs(offset_minutes)%60:02d}"
+            out.append({
+                **h,
+                "local_time": local.strftime("%H:%M"),
+                "local_date": local.strftime("%Y-%m-%d"),
+                "offset": offset_str,
+                "offset_minutes": offset_minutes,
+                "weekday": local.strftime("%a").upper(),
+            })
+        except Exception as e:
+            logger.warning(f"tz fail {h['zone']}: {e}")
+    return {"server_utc": now_utc.isoformat(), "hotspots": out}
+
+
+# ==================================================================
 # TTS / STT  (OpenAI via Emergent gateway)
 # ==================================================================
 class TTSRequest(BaseModel):
@@ -605,6 +815,270 @@ async def set_watchlist(w: Watchlist):
 
 
 # ==================================================================
+# DAGRCMD — Encrypted Comms (E2E)
+# Server NEVER sees plaintext. Each message is encrypted client-side using
+# tweetnacl (X25519 + XSalsa20-Poly1305) once per recipient.
+# Server stores only ciphertext maps + nonces and relays via WebSocket.
+# ==================================================================
+import hashlib
+import secrets
+
+def _hash_code(callsign: str, code: str) -> str:
+    """Hash auth code with callsign as salt (NEVER store raw)."""
+    return hashlib.sha256(f"{callsign.lower()}::{code}".encode()).hexdigest()
+
+
+class OfficerRegister(BaseModel):
+    callsign: str
+    auth_code: str  # 6+ char password / pin
+    public_key: str  # base64 X25519 public key
+    rank: Optional[str] = None
+    unit: Optional[str] = None
+
+
+class OfficerLogin(BaseModel):
+    callsign: str
+    auth_code: str
+
+
+@api.post("/dagrcmd/officers/register")
+async def register_officer(o: OfficerRegister):
+    callsign = o.callsign.strip().upper()
+    if not callsign or not o.auth_code or not o.public_key:
+        raise HTTPException(400, "callsign, auth_code, public_key required")
+    existing = await db.dagr_officers.find_one({"callsign": callsign})
+    if existing:
+        # If same auth_code, allow public_key rotation (re-install)
+        if existing.get("auth_hash") != _hash_code(callsign, o.auth_code):
+            raise HTTPException(409, "Callsign already exists")
+        await db.dagr_officers.update_one(
+            {"callsign": callsign},
+            {"$set": {"public_key": o.public_key,
+                      "rank": o.rank or existing.get("rank"),
+                      "unit": o.unit or existing.get("unit")}}
+        )
+        return {"callsign": callsign, "rotated": True}
+    doc = {
+        "callsign": callsign,
+        "auth_hash": _hash_code(callsign, o.auth_code),
+        "public_key": o.public_key,
+        "rank": o.rank or "OPERATOR",
+        "unit": o.unit or "UNASSIGNED",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_seen": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.dagr_officers.insert_one(doc)
+    return {"callsign": callsign, "rotated": False}
+
+
+@api.post("/dagrcmd/officers/login")
+async def login_officer(o: OfficerLogin):
+    callsign = o.callsign.strip().upper()
+    doc = await db.dagr_officers.find_one({"callsign": callsign}, {"_id": 0})
+    if not doc or doc.get("auth_hash") != _hash_code(callsign, o.auth_code):
+        raise HTTPException(401, "Invalid callsign or auth code")
+    await db.dagr_officers.update_one(
+        {"callsign": callsign},
+        {"$set": {"last_seen": datetime.now(timezone.utc).isoformat()}}
+    )
+    doc.pop("auth_hash", None)
+    return doc
+
+
+@api.get("/dagrcmd/officers")
+async def list_officers(callsigns: Optional[str] = None):
+    """Returns directory of officers (callsign + public_key). For key exchange."""
+    q = {}
+    if callsigns:
+        wanted = [c.strip().upper() for c in callsigns.split(",") if c.strip()]
+        q = {"callsign": {"$in": wanted}}
+    docs = await db.dagr_officers.find(q, {"_id": 0, "auth_hash": 0}).to_list(500)
+    return {"officers": docs}
+
+
+class ChannelCreate(BaseModel):
+    name: str
+    owner: str  # callsign
+    auth_code: str
+    members: List[str] = []
+
+
+@api.post("/dagrcmd/channels")
+async def create_channel(c: ChannelCreate):
+    owner = c.owner.strip().upper()
+    owner_doc = await db.dagr_officers.find_one({"callsign": owner})
+    if not owner_doc or owner_doc.get("auth_hash") != _hash_code(owner, c.auth_code):
+        raise HTTPException(401, "Auth failed")
+    members = sorted({owner, *(m.strip().upper() for m in c.members)})
+    channel = {
+        "id": str(uuid.uuid4()),
+        "name": c.name.strip()[:64] or "CHANNEL",
+        "owner": owner,
+        "members": members,
+        "join_code": secrets.token_hex(3).upper(),  # 6-char invite code
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.dagr_channels.insert_one(channel)
+    channel.pop("_id", None)
+    return channel
+
+
+@api.get("/dagrcmd/channels/{callsign}")
+async def list_channels(callsign: str):
+    cs = callsign.strip().upper()
+    docs = await db.dagr_channels.find({"members": cs}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"channels": docs}
+
+
+class ChannelJoin(BaseModel):
+    callsign: str
+    auth_code: str
+    join_code: str
+
+
+@api.post("/dagrcmd/channels/join")
+async def join_channel(j: ChannelJoin):
+    cs = j.callsign.strip().upper()
+    code = j.join_code.strip().upper()
+    officer = await db.dagr_officers.find_one({"callsign": cs})
+    if not officer or officer.get("auth_hash") != _hash_code(cs, j.auth_code):
+        raise HTTPException(401, "Auth failed")
+    chan = await db.dagr_channels.find_one({"join_code": code}, {"_id": 0})
+    if not chan:
+        raise HTTPException(404, "Invalid join code")
+    if cs not in chan["members"]:
+        await db.dagr_channels.update_one(
+            {"id": chan["id"]}, {"$addToSet": {"members": cs}}
+        )
+        chan["members"] = sorted(set(chan["members"] + [cs]))
+    return chan
+
+
+class EncryptedMessage(BaseModel):
+    channel_id: str
+    sender: str
+    sender_pubkey: str
+    kind: Literal["text", "audio", "location"] = "text"
+    # ciphertexts: {recipient_callsign: {"ct": "...", "nonce": "..."}}
+    ciphertexts: dict
+    meta: Optional[dict] = None  # optional non-sensitive metadata (e.g., audio_ms)
+
+
+@api.post("/dagrcmd/messages")
+async def send_message(m: EncryptedMessage):
+    chan = await db.dagr_channels.find_one({"id": m.channel_id}, {"_id": 0})
+    if not chan:
+        raise HTTPException(404, "Channel not found")
+    if m.sender not in chan["members"]:
+        raise HTTPException(403, "Sender not in channel")
+    msg = {
+        "id": str(uuid.uuid4()),
+        "channel_id": m.channel_id,
+        "sender": m.sender,
+        "sender_pubkey": m.sender_pubkey,
+        "kind": m.kind,
+        "ciphertexts": m.ciphertexts,
+        "meta": m.meta or {},
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.dagr_messages.insert_one(msg)
+    msg.pop("_id", None)
+    # Broadcast to connected members
+    await _dagr_broadcast(chan["members"], {"type": "message", "data": msg})
+    return msg
+
+
+@api.get("/dagrcmd/messages/{channel_id}")
+async def list_messages(channel_id: str, callsign: str, limit: int = 100):
+    cs = callsign.strip().upper()
+    chan = await db.dagr_channels.find_one({"id": channel_id})
+    if not chan or cs not in chan["members"]:
+        raise HTTPException(403, "Not a member")
+    docs = await db.dagr_messages.find(
+        {"channel_id": channel_id}, {"_id": 0}
+    ).sort("timestamp", -1).to_list(limit)
+    docs.reverse()
+    # Only return ciphertext for this recipient (privacy) — keep size small
+    out = []
+    for d in docs:
+        ct = d["ciphertexts"].get(cs)
+        if not ct and d["sender"] != cs:
+            continue
+        out.append({**d, "ciphertext_for_me": ct})
+    return {"messages": out}
+
+
+# ---------- WebSocket relay (real-time) ----------
+class _Hub:
+    def __init__(self):
+        self.conns: dict = {}  # callsign -> WebSocket
+
+    async def connect(self, callsign: str, ws: WebSocket):
+        await ws.accept()
+        # Drop prior connection if any
+        old = self.conns.get(callsign)
+        if old:
+            try: await old.close()
+            except Exception: pass
+        self.conns[callsign] = ws
+
+    def disconnect(self, callsign: str, ws: WebSocket):
+        if self.conns.get(callsign) is ws:
+            self.conns.pop(callsign, None)
+
+    async def send(self, callsign: str, payload: dict):
+        ws = self.conns.get(callsign)
+        if ws is None:
+            return False
+        try:
+            await ws.send_json(payload)
+            return True
+        except Exception:
+            self.conns.pop(callsign, None)
+            return False
+
+
+hub = _Hub()
+
+
+async def _dagr_broadcast(callsigns: list, payload: dict):
+    for cs in callsigns:
+        await hub.send(cs, payload)
+
+
+@app.websocket("/api/ws/dagrcmd/{callsign}")
+async def ws_dagrcmd(websocket: WebSocket, callsign: str, auth_code: str = ""):
+    cs = callsign.strip().upper()
+    officer = await db.dagr_officers.find_one({"callsign": cs})
+    if not officer or officer.get("auth_hash") != _hash_code(cs, auth_code):
+        await websocket.close(code=4401)
+        return
+    await hub.connect(cs, websocket)
+    await websocket.send_json({"type": "ready", "callsign": cs,
+                               "server_time": datetime.now(timezone.utc).isoformat()})
+    try:
+        while True:
+            data = await websocket.receive_json()
+            # Heartbeat / presence pings only — actual encrypted messages go via REST
+            if data.get("type") == "ping":
+                await websocket.send_json({"type": "pong",
+                                          "t": datetime.now(timezone.utc).isoformat()})
+            elif data.get("type") == "presence":
+                # Broadcast presence to channel members
+                channels = await db.dagr_channels.find({"members": cs}).to_list(50)
+                everyone = sorted({m for c in channels for m in c["members"]} - {cs})
+                await _dagr_broadcast(everyone, {"type": "presence",
+                                                 "callsign": cs,
+                                                 "status": data.get("status", "online")})
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"ws err {cs}: {e}")
+    finally:
+        hub.disconnect(cs, websocket)
+
+
+# ==================================================================
 # Health
 # ==================================================================
 @api.get("/")
@@ -612,6 +1086,18 @@ async def root():
     return {"app": "Project Inception", "status": "ok",
             "alpha_vantage_configured": bool(ALPHA_VANTAGE_KEY),
             "llm_configured": bool(EMERGENT_LLM_KEY)}
+
+
+# Serve Ionicons font directly so the frontend can bypass Metro asset bundling
+# (which sometimes returns an empty file under tunnel mode).
+IONICONS_TTF = Path("/app/frontend/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf")
+
+
+@api.get("/fonts/ionicons.ttf")
+async def fonts_ionicons():
+    if IONICONS_TTF.exists():
+        return FileResponse(str(IONICONS_TTF), media_type="font/ttf")
+    raise HTTPException(404, "Font not found")
 
 
 app.include_router(api)

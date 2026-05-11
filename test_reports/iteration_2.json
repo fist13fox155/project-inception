@@ -1,0 +1,50 @@
+{
+  "summary": "All 20 new-feature backend tests passed (100%) covering Ionicons font endpoint, world crisis + 26 hotspots (timezone-formatted), Finnhub live stock quotes (is_live=true for AAPL/TSLA/NVDA), and the full DAGRCMD module (officer register/rotate/login, channel create/list/join with auth, encrypted message send/retrieve with per-recipient ciphertext_for_me, non-member 403). Regression: 15/16 prior tests passed; PDF generation intermittently fails with 'Bad outline JSON' due to Claude returning narrative text containing unescaped quotes inside the JSON outline (failed 2x, passed on 3rd retry). Overall backend: 35/36 (97.2%) on a single run; 36/36 with retry.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/documents/generate (format=pdf)",
+        "issue": "Intermittent 500 'Bad outline JSON: Expecting , delimiter ...' — _ai_outline regex picks up Claude's JSON but the model occasionally emits narrative paragraphs containing unescaped double-quotes/apostrophes that break json.loads. Hit ~2 of 3 runs in this iteration (failed at col 7370 and col 1187, passed on retry). Recommend tightening the system_message to mandate single-quote-free output OR using a JSON-repair library (json5, demjson, or instructing model to wrap in <json>...</json> + double-quote-escape pass). NOT a code crash, but degrades reliability of the document feature."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/backend/tests/test_inception_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_new_results.xml",
+    "/app/test_reports/pytest/pytest_regression_results.xml"
+  ],
+  "action_items": [
+    "Harden _ai_outline JSON parsing: either (a) instruct Claude to escape all internal double-quotes / avoid them in paragraph text, or (b) call a lenient JSON parser (json5) / strip smart-quotes / add retry-with-repair on json.JSONDecodeError. Currently document/pdf returns 500 roughly 30-50% of the time during this iteration."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1100 lines — approaching the 700-line guideline; consider splitting into routers (chat.py, stocks.py, documents.py, world.py, dagrcmd.py) for maintainability.",
+    "DAGRCMD endpoints correctly hash auth_code with callsign-salted SHA-256 and never expose auth_hash in any response (verified via test_login_officer / test_list_officers_directory).",
+    "Channel join_code is 6-char hex from secrets.token_hex(3).upper() — uppercase and matches /^[0-9A-F]{6}$/. Good entropy (~24 bits) but vulnerable to enumeration; consider rate-limit on /channels/join in future.",
+    "/api/dagrcmd/messages stores per-recipient ciphertext dict only; server has no plaintext access — verified by inspecting EncryptedMessage model and list_messages handler which only returns ciphertext_for_me for caller. E2E privacy correctly implemented.",
+    "WebSocket /api/ws/dagrcmd/{callsign} performs auth_code verification on connect (close 4401 on failure). Good. No backpressure / message-size limits on receive_json — could be DoS vector in prod.",
+    "Finnhub general news /api/world/crisis filtering is keyword-based via _classify; works but is noisy (depends on Finnhub providing relevant headlines). Tests passed because category=military returned 0 items (which is technically 'filtered to military-only' — empty set passes). Consider adding fallback content when Finnhub is empty.",
+    "_crisis_cache and _av_cache are module-globals — fine for single-worker uvicorn; will not survive process restart or scale to multi-replica.",
+    "MongoDB _id correctly excluded everywhere (verified in dagrcmd channel create which explicitly pops _id after insert)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_features.py (created — 20 tests for fonts/world/stocks-finnhub/DAGRCMD)"
+  ],
+  "success_rate": {
+    "backend": "35/36 on single run = 97.2%; 36/36 with retry on the flaky PDF test",
+    "frontend": "not tested (backend-only request)"
+  },
+  "seed_data_creation": "TEST_-prefixed officers (TEST_ALPHA_xxxx, TEST_BRAVO_xxxx) inserted into dagr_officers, plus one TEST_CMD_NET channel and 1 encrypted message. No DELETE endpoint exposed for DAGRCMD — relies on prefix isolation for cleanup. Watchlist 'local-user' still set to [AAPL, AMZN] from iteration_1.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend BASE_URL hardcoded in conftest.py to https://inception-ai-gen.preview.emergentagent.com (matches frontend/.env EXPO_PUBLIC_BACKEND_URL). Finnhub key is live and returning real-time AAPL/TSLA/NVDA with is_live=true. Ionicons.ttf serves 311KB (>100KB asserted) with content-type font/ttf. DAGRCMD WebSocket NOT covered by pytest (no async ws client) — handler logic verified by code review only. Document PDF generation has a ~30-50% flaky failure rate this iteration due to Claude JSON formatting; if hit during retest, retry once before flagging as new regression.",
+  "rca_of_issue": "PDF generation 500 RCA: _ai_outline calls Claude with prompt 'Return ONLY valid minified JSON' then does re.search(r'\\{.*\\}', reply, re.S).group(0) → json.loads. Claude's PDF outline includes longer narrative paragraphs which sometimes contain a contraction (it's, don't) or quoted phrase ('Project Inception') with naive double-quotes the model didn't escape. The regex greedily grabs the outer braces but the inner content has unescaped \\\" or smart-quotes, causing json.JSONDecodeError. Reproduction: hit POST /api/documents/generate with format=pdf 3-5 times → ~1-2 will 500. Mitigation: (1) pre-strip smart quotes via reply.translate(); (2) wrap json.loads in a json5/demjson fallback; (3) instruct system prompt to 'use only ASCII straight quotes and escape every internal double-quote as \\\\\"' and reject responses where bracket depth doesn't balance; (4) add one automatic re-prompt on JSONDecodeError. PPTX outlines have shorter bullets and fail far less often."
+}

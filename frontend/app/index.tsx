@@ -81,9 +81,19 @@ export default function Home() {
             <Ionicons name="globe-outline" size={22} color={theme.colors.text} />
             <Text style={styles.logoText}>PROJECT INCEPTION</Text>
           </View>
-          <View style={styles.liveBadge} testID="live-indicator">
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              onPress={() => router.push('/dagrcmd')}
+              testID="open-dagrcmd"
+              style={styles.dagrBadge}
+            >
+              <Ionicons name="shield-half" size={11} color="#FF3333" />
+              <Text style={styles.dagrText}>DAGRCMD</Text>
+            </Pressable>
+            <View style={styles.liveBadge} testID="live-indicator">
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
           </View>
         </View>
 
@@ -138,6 +148,10 @@ export default function Home() {
 
         {/* Bottom nav */}
         <View style={styles.bottomNav}>
+          <Pressable style={styles.navBtn} onPress={() => router.push('/world')} testID="nav-world">
+            <Ionicons name="earth-outline" size={20} color={theme.colors.danger} />
+            <Text style={[styles.navText, { color: theme.colors.danger }]}>WORLD</Text>
+          </Pressable>
           <Pressable style={styles.navBtn} onPress={() => router.push('/library')} testID="nav-library">
             <Ionicons name="folder-open-outline" size={20} color={theme.colors.textSecondary} />
             <Text style={styles.navText}>LIBRARY</Text>
@@ -176,6 +190,14 @@ const styles = StyleSheet.create({
   },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.green },
   liveText: { color: theme.colors.green, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
+  dagrBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: theme.radius.full,
+    backgroundColor: 'rgba(255,51,51,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,51,51,0.35)',
+  },
+  dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   tickerRow: { flexDirection: 'row', marginHorizontal: -4, marginTop: 4 },
   loaderBox: { flex: 1, height: 84, alignItems: 'center', justifyContent: 'center' },
   jarvisSection: {
