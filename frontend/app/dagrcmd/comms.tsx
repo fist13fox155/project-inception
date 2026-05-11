@@ -4,13 +4,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput,
-  ActivityIndicator, Alert, RefreshControl, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, RefreshControl, KeyboardAvoidingView, Platform, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { dagrTheme as T } from '../../constants/dagrTheme';
-import { API } from '../../constants/theme';
+import { API, BACKEND_URL } from '../../constants/theme';
 import { getCredentials, ensureKeyPair, clearIdentity } from '../../lib/crypto';
 
 type Channel = { id: string; name: string; owner: string; members: string[]; join_code: string };
@@ -92,6 +92,20 @@ export default function CommsScreen() {
     router.replace('/dagrcmd');
   };
 
+  const shareInvite = async (ch: Channel) => {
+    const url = `${BACKEND_URL}/api/join/${ch.join_code}`;
+    const message =
+      `🎯 You're invited to ${ch.name} on DAGRCMD\n\n` +
+      `Tap to install + join:\n${url}\n\n` +
+      `Or manually enter invite code: ${ch.join_code}\n` +
+      `(End-to-end encrypted secure channel)`;
+    try {
+      await Share.share({ message, url, title: `Join ${ch.name}` });
+    } catch (e) {
+      Alert.alert('Invite', message);
+    }
+  };
+
   if (!me) return null;
 
   return (
@@ -142,13 +156,11 @@ export default function CommsScreen() {
           </View>
         ) : (
           channels.map((c) => (
-            <Pressable
-              key={c.id}
-              onPress={() => router.push(`/dagrcmd/channel/${c.id}` as any)}
-              style={styles.channelRow}
-              testID={`channel-${c.id}`}
-            >
-              <View style={styles.channelLeft}>
+            <View key={c.id} style={styles.channelRow} testID={`channel-${c.id}`}>
+              <Pressable
+                onPress={() => router.push(`/dagrcmd/channel/${c.id}` as any)}
+                style={styles.channelLeft}
+              >
                 <View style={styles.channelIcon}>
                   <Ionicons name="lock-closed" size={16} color={T.colors.red} />
                 </View>
@@ -159,9 +171,16 @@ export default function CommsScreen() {
                   </Text>
                   <Text style={styles.joinCode}>INVITE: {c.join_code}</Text>
                 </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={T.colors.textMuted} />
-            </Pressable>
+              </Pressable>
+              <Pressable
+                onPress={() => shareInvite(c)}
+                style={styles.shareBtn}
+                testID={`share-${c.id}`}
+              >
+                <Ionicons name="share-social" size={18} color={T.colors.amber} />
+                <Text style={styles.shareBtnText}>INVITE</Text>
+              </Pressable>
+            </View>
           ))
         )}
       </ScrollView>
@@ -257,6 +276,13 @@ const styles = StyleSheet.create({
   channelName: { color: T.colors.textPrimary, fontFamily: T.fonts.heading, fontSize: 14, letterSpacing: 1.5 },
   channelMeta: { color: T.colors.textMuted, fontFamily: T.fonts.mono, fontSize: 10, marginTop: 2, letterSpacing: 1 },
   joinCode: { color: T.colors.amber, fontFamily: T.fonts.mono, fontSize: 10, marginTop: 2, letterSpacing: 1.5 },
+  shareBtn: {
+    paddingHorizontal: 10, paddingVertical: 8, borderRadius: T.radius.sm,
+    borderWidth: 1, borderColor: 'rgba(255,160,0,0.4)',
+    backgroundColor: 'rgba(255,160,0,0.08)',
+    alignItems: 'center', justifyContent: 'center', gap: 2,
+  },
+  shareBtnText: { color: T.colors.amber, fontFamily: T.fonts.heading, fontSize: 9, letterSpacing: 1.5 },
   modalRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.7)' },
   modalCard: {
     backgroundColor: T.colors.bg, borderTopWidth: 1, borderTopColor: T.colors.borderActive,

@@ -1196,6 +1196,85 @@ async def fonts_ionicons():
     raise HTTPException(404, "Font not found")
 
 
+@app.get("/api/join/{code}", response_class=Response)
+async def join_landing(code: str):
+    """User-facing join landing page. Shows install instructions + the invite code."""
+    code_safe = (code or "").upper().replace("<", "").replace(">", "")[:12]
+    chan = await db.dagr_channels.find_one({"join_code": code_safe}, {"_id": 0})
+    chan_name = (chan or {}).get("name", "—")
+    chan_owner = (chan or {}).get("owner", "—")
+    members = len((chan or {}).get("members", [])) if chan else 0
+    app_url = "https://inception-ai-gen.preview.emergentagent.com"
+    html = f"""<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAGRCMD Invite · {code_safe}</title>
+<style>
+  body {{ margin:0; padding:0; background:#0a0000; color:#FFB6B6;
+         font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif; }}
+  .wrap {{ max-width:520px; margin:0 auto; padding:32px 20px; }}
+  h1 {{ color:#FF1A1A; letter-spacing:6px; font-weight:700; font-size:28px;
+        margin:0 0 4px; text-align:center; }}
+  .sub {{ color:#7A2424; letter-spacing:2px; font-size:11px;
+          text-align:center; margin-bottom:24px; }}
+  .code {{ background:#140404; border:1px solid #FF1A1A; border-radius:8px;
+           padding:20px; text-align:center; margin:16px 0; }}
+  .code .label {{ color:#FF1A1A; letter-spacing:3px; font-size:11px; }}
+  .code .value {{ color:#FF4444; font-size:42px; letter-spacing:6px;
+                  font-weight:700; font-family:monospace; margin-top:8px; }}
+  .card {{ background:#140404; border:1px solid #2E0A0A; border-radius:8px;
+           padding:18px; margin:12px 0; }}
+  .card h3 {{ color:#FF1A1A; letter-spacing:2px; font-size:12px;
+              margin:0 0 10px; }}
+  .row {{ display:flex; gap:14px; margin:8px 0; align-items:flex-start; }}
+  .num {{ flex-shrink:0; width:30px; height:30px; border-radius:15px;
+          background:#FF1A1A; color:#0a0000; text-align:center; line-height:30px;
+          font-weight:700; font-size:14px; }}
+  .row p {{ margin:4px 0; line-height:1.4; font-size:14px; color:#FFB6B6; }}
+  .row p b {{ color:#fff; }}
+  a {{ color:#FF4444; text-decoration:none; word-break:break-all; }}
+  .btn {{ display:block; background:#FF1A1A; color:#0a0000; text-align:center;
+          padding:14px; border-radius:8px; font-weight:700; letter-spacing:2px;
+          margin:16px 0; font-size:14px; }}
+  .small {{ color:#7A2424; font-size:11px; text-align:center; margin-top:24px;
+            letter-spacing:1px; }}
+</style></head>
+<body>
+<div class="wrap">
+  <h1>[ DAGRCMD ]</h1>
+  <div class="sub">CLASSIFIED SECURE TERMINAL</div>
+
+  <div class="card">
+    <h3>YOU HAVE BEEN INVITED</h3>
+    <p style="margin:6px 0;color:#FFB6B6;font-size:14px">
+      <b style="color:#fff">{chan_name}</b><br>
+      Owner: {chan_owner} · {members} operators
+    </p>
+  </div>
+
+  <div class="code">
+    <div class="label">INVITE CODE</div>
+    <div class="value">{code_safe}</div>
+  </div>
+
+  <div class="card">
+    <h3>HOW TO JOIN</h3>
+    <div class="row"><div class="num">1</div><p>Install <b>Expo Go</b> on your phone:<br>
+      <a href="https://apps.apple.com/app/expo-go/id982107779">iOS App Store</a><br>
+      <a href="https://play.google.com/store/apps/details?id=host.exp.exponent">Google Play</a></p></div>
+    <div class="row"><div class="num">2</div><p>Open <b>Expo Go</b> and scan the QR or enter:<br><a href="{app_url}">{app_url}</a></p></div>
+    <div class="row"><div class="num">3</div><p>Tap the red <b>DAGRCMD</b> chip on the home screen, then <b>ENLIST</b> (or AUTHENTICATE if you already have a callsign).</p></div>
+    <div class="row"><div class="num">4</div><p>Inside COMMS, tap <b>JOIN BY CODE</b> and paste:<br><b style="color:#FF4444;font-family:monospace;font-size:18px;letter-spacing:3px">{code_safe}</b></p></div>
+  </div>
+
+  <a class="btn" href="{app_url}">OPEN DAGRCMD</a>
+  <p class="small">END-TO-END ENCRYPTED · X25519 · NACL BOX</p>
+</div>
+</body></html>"""
+    return Response(content=html, media_type="text/html")
+
+
 app.include_router(api)
 
 app.add_middleware(

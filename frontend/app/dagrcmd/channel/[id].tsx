@@ -240,7 +240,11 @@ export default function ChannelScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+      >
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={{ padding: 12, gap: 6 }}>
           {messages.length === 0 && (
             <Text style={styles.emptyHint}>
