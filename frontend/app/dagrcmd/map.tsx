@@ -172,6 +172,22 @@ export default function DagrMapScreen() {
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => { if (ready) sendPings(pings); }, [ready, pings, sendPings]);
 
+  // Auto-request location permission on first mount so the map auto-pins user
+  useEffect(() => {
+    (async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (!perm.granted) {
+          const req = await Location.requestForegroundPermissionsAsync();
+          if (req.granted) {
+            await loadAll();
+          }
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const snapToOperator = (p: OperatorPing) => {
     webRef.current?.postMessage(JSON.stringify({ t: 'snap', d: { lat: p.lat, lng: p.lng } }));
   };

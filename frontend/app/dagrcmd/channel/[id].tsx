@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'react-native';
 import { dagrTheme as T } from '../../../constants/dagrTheme';
 import { API, BACKEND_URL } from '../../../constants/theme';
@@ -23,7 +24,7 @@ import {
 type Channel = { id: string; name: string; owner: string; members: string[]; join_code: string };
 type EncMsg = {
   id: string; channel_id: string; sender: string; sender_pubkey: string;
-  kind: 'text' | 'audio' | 'location' | 'image';
+  kind: 'text' | 'audio' | 'location' | 'image' | 'video' | 'live';
   ciphertexts: Record<string, { ct: string; nonce: string }>;
   ciphertext_for_me?: { ct: string; nonce: string };
   meta?: any; timestamp: string;
@@ -128,7 +129,7 @@ export default function ChannelScreen() {
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, [messages]);
 
-  const send = async (kind: 'text' | 'audio' | 'location' | 'image', payload: string, meta: any = {}) => {
+  const send = async (kind: 'text' | 'audio' | 'location' | 'image' | 'video' | 'live', payload: string, meta: any = {}) => {
     if (!me || !channel || !payload) return;
     setSending(true);
     try {
@@ -190,7 +191,6 @@ export default function ChannelScreen() {
       setRecording(null);
       if (!uri) return;
       // Read as base64
-      const FileSystem = await import('expo-file-system/legacy');
       const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
       const durMs = (status as any)?.durationMillis || 0;
       await send('audio', b64, { audio_ms: durMs });
@@ -201,14 +201,30 @@ export default function ChannelScreen() {
     if (!m.plaintext) return;
     try {
       setPlayingId(m.id);
-      const sound = new Audio.Sound();
-      await sound.loadAsync({ uri: `data:audio/m4a;base64,${m.plaintext}` });
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate(s => {
-        if ((s as any).didJustFinish) { setPlayingId(null); sound.unloadAsync().catch(() => {}); }
+      const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+      const path = `${dir}voice_${m.id}.m4a`;
+      // Write the decrypted base64 audio to a file so expo-av can play it natively
+      const info = await FileSystem.getInfoAsync(path).catch(() => ({ exists: false }) as any);
+      if (!info.exists) {
+        await FileSystem.writeAsStringAsync(path, m.plaintext, { encoding: FileSystem.EncodingType.Base64 });
+      }
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: path },
+        { shouldPlay: true, volume: 1.0 }
+      );
+      sound.setOnPlaybackStatusUpdate((s: any) => {
+        if (s.didJustFinish) { setPlayingId(null); sound.unloadAsync().catch(() => {}); }
+        if (s.error) { setPlayingId(null); }
       });
-    } catch (e) { setPlayingId(null); }
+    } catch (e) {
+      console.warn('audio play failed', e);
+      setPlayingId(null);
+      Alert.alert('Playback failed', 'Could not play this transmission.');
+    }
   };
+
+  const stopAudio = () => setPlayingId(null);
 
   const sendImage = async () => {
     try {
@@ -226,6 +242,97 @@ export default function ChannelScreen() {
       await send('image', b64, { w, h });
     } catch (e: any) { Alert.alert('Image failed', String(e?.message || e)); }
   };
+
+  const sendVideo = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Permission needed', 'Library access required.'); return; }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        quality: 0.5,
+        videoMaxDuration: 15,
+      });
+      if (res.canceled || !res.assets?.[0]?.uri) return;
+      const uri = res.assets[0].uri;
+      // Read as base64
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.size && info.size > 8 * 1024 * 1024) {
+        Alert.alert('Too large', 'Video must be under 8MB. Shorter clip please.');
+        return;
+      }
+      const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const dur = res.assets[0].duration || 0;
+      await send('video', b64, { dur_ms: dur, ext: 'mp4' });
+    } catch (e: any) { Alert.alert('Video failed', String(e?.message || e)); }
+  };
+
+  // === LIVE CALL MODE ===
+  // Continuous 2.5-sec audio chunk recording → encrypted broadcast.
+  // All channel members with the app open hear the call automatically.
+  const [liveCallOn, setLiveCallOn] = useState(false);
+  const liveRecRef = useRef<Audio.Recording | null>(null);
+  const liveActiveRef = useRef(false);
+
+  const stopLiveCall = useCallback(async () => {
+    liveActiveRef.current = false;
+    setLiveCallOn(false);
+    try { await liveRecRef.current?.stopAndUnloadAsync(); } catch {}
+    liveRecRef.current = null;
+    await send('text', '📞 CALL ENDED', {});
+  }, []);
+
+  const liveLoop = useCallback(async () => {
+    if (!liveActiveRef.current) return;
+    try {
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
+      await rec.startAsync();
+      liveRecRef.current = rec;
+      await new Promise(r => setTimeout(r, 2500));
+      if (!liveActiveRef.current) { try { await rec.stopAndUnloadAsync(); } catch {} return; }
+      try { await rec.stopAndUnloadAsync(); } catch {}
+      const uri = rec.getURI();
+      const status: any = await rec.getStatusAsync().catch(() => ({}));
+      if (uri) {
+        try {
+          const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+          await send('live', b64, { audio_ms: status?.durationMillis || 2500 });
+        } catch {}
+      }
+    } catch (e) { console.warn('live loop', e); }
+    if (liveActiveRef.current) setTimeout(liveLoop, 50);
+  }, []);
+
+  const startLiveCall = async () => {
+    const perm = await Audio.requestPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Mic permission required'); return; }
+    if (recording) { Alert.alert('Stop PTT first'); return; }
+    liveActiveRef.current = true;
+    setLiveCallOn(true);
+    await send('text', '📞 LIVE CALL STARTED', {});
+    liveLoop();
+  };
+
+  // Auto-play incoming live-call audio chunks
+  useEffect(() => {
+    if (!messages.length) return;
+    const latest = messages[messages.length - 1];
+    if (latest.kind !== 'live' || !latest.plaintext) return;
+    if (latest.sender === me?.callsign) return; // don't echo own audio
+    (async () => {
+      try {
+        const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+        const path = `${dir}live_${latest.id}.m4a`;
+        await FileSystem.writeAsStringAsync(path, latest.plaintext!, { encoding: FileSystem.EncodingType.Base64 });
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
+        const { sound } = await Audio.Sound.createAsync({ uri: path }, { shouldPlay: true });
+        sound.setOnPlaybackStatusUpdate((s: any) => {
+          if (s.didJustFinish || s.error) sound.unloadAsync().catch(() => {});
+        });
+      } catch (e) { console.warn('live playback', e); }
+    })();
+  }, [messages, me?.callsign]);
 
   const deleteMsg = async (m: DecodedMsg) => {
     if (!me) return;
@@ -272,10 +379,20 @@ export default function ChannelScreen() {
             <Text style={styles.statusMeta}> · {officers.length} OPS</Text>
           </View>
         </View>
+        <Pressable onPress={liveCallOn ? stopLiveCall : startLiveCall} style={styles.iconBtn} testID="call-btn">
+          <Icon name={liveCallOn ? 'close' : 'radio'} size={20} color={liveCallOn ? T.colors.red : T.colors.green} />
+        </Pressable>
         <Pressable onPress={sendLocation} style={styles.iconBtn} testID="loc-btn">
           <Icon name="locate" size={20} color={T.colors.amber} />
         </Pressable>
       </View>
+
+      {liveCallOn && (
+        <View style={styles.callBar} testID="live-call-bar">
+          <View style={styles.callDot} />
+          <Text style={styles.callBarText}>LIVE CALL · BROADCASTING · TAP × TO END</Text>
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -316,9 +433,42 @@ export default function ChannelScreen() {
                       <Icon name={playingId === m.id ? 'pause-circle' : 'play-circle'} size={26} color={T.colors.red} />
                       <View>
                         <Text style={styles.msgText}>VOICE TRANSMISSION</Text>
-                        <Text style={styles.msgMeta}>{Math.round((m.meta?.audio_ms || 0) / 100) / 10}s · encrypted</Text>
+                        <Text style={styles.msgMeta}>{Math.round((m.meta?.audio_ms || 0) / 100) / 10}s · tap to replay</Text>
                       </View>
                     </Pressable>
+                  )}
+                  {m.kind === 'video' && !failed && m.plaintext && (
+                    <View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Icon name="play-circle" size={16} color={T.colors.amber} />
+                        <Text style={styles.msgText}>VIDEO {(m.meta?.dur_ms ? `· ${Math.round(m.meta.dur_ms / 1000)}s` : '')}</Text>
+                      </View>
+                      <Pressable
+                        onPress={async () => {
+                          try {
+                            const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+                            const path = `${dir}vid_${m.id}.${m.meta?.ext || 'mp4'}`;
+                            const info = await FileSystem.getInfoAsync(path).catch(() => ({ exists: false }) as any);
+                            if (!info.exists) {
+                              await FileSystem.writeAsStringAsync(path, m.plaintext!, { encoding: FileSystem.EncodingType.Base64 });
+                            }
+                            const Sharing = await import('expo-sharing');
+                            if (await Sharing.isAvailableAsync()) {
+                              await Sharing.shareAsync(path, { mimeType: 'video/mp4' });
+                            }
+                          } catch (e: any) { Alert.alert('Video failed', String(e?.message || e)); }
+                        }}
+                        style={styles.videoBox}
+                      >
+                        <Text style={styles.videoText}>▶ OPEN VIDEO</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                  {m.kind === 'live' && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Icon name="radio" size={16} color={T.colors.green} />
+                      <Text style={styles.msgText}>LIVE CALL · {Math.round(((m.meta?.audio_ms || 2500) / 100)) / 10}s</Text>
+                    </View>
                   )}
                   {m.kind === 'location' && !failed && (() => {
                     try {
@@ -351,6 +501,12 @@ export default function ChannelScreen() {
           >
             <Icon name={recording ? 'radio' : 'mic'} size={22}
               color={recording ? T.colors.amber : T.colors.red} />
+          </Pressable>
+          <Pressable onPress={sendImage} testID="img-btn" style={styles.attachBtn}>
+            <Icon name="add" size={18} color={T.colors.amber} />
+          </Pressable>
+          <Pressable onPress={sendVideo} testID="vid-btn" style={styles.attachBtn}>
+            <Icon name="play-circle" size={18} color={T.colors.amber} />
           </Pressable>
           <TextInput
             style={styles.input}
@@ -428,4 +584,21 @@ const styles = StyleSheet.create({
     backgroundColor: T.colors.red,
     alignItems: 'center', justifyContent: 'center',
   },
+  attachBtn: {
+    width: 36, height: 48, alignItems: 'center', justifyContent: 'center',
+  },
+  callBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(0,255,102,0.12)', borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,255,102,0.4)',
+    paddingHorizontal: 14, paddingVertical: 6,
+  },
+  callDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: T.colors.green },
+  callBarText: { color: T.colors.green, fontFamily: T.fonts.mono, fontSize: 10, letterSpacing: 1.5 },
+  videoBox: {
+    marginTop: 6, backgroundColor: 'rgba(255,160,0,0.08)',
+    borderWidth: 1, borderColor: T.colors.amber, borderRadius: T.radius.sm,
+    paddingVertical: 10, paddingHorizontal: 14, alignItems: 'center',
+  },
+  videoText: { color: T.colors.amber, fontFamily: T.fonts.heading, fontSize: 12, letterSpacing: 2 },
 });

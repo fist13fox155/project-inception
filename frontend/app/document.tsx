@@ -111,7 +111,7 @@ export default function DocumentScreen() {
                   style={[styles.formatOpt, format === f && styles.formatOptActive]}
                   testID={`format-${f}`}
                 >
-                  <Ionicons
+                  <Icon
                     name={f === 'pdf' ? 'document-text-outline' : 'easel-outline'}
                     size={28}
                     color={format === f ? theme.colors.green : theme.colors.textTertiary}

@@ -108,7 +108,7 @@ export default function StockDetail() {
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>JARVIS RECOMMENDATION</Text>
             <Pressable onPress={getRec} style={styles.refreshBtn} testID="rec-refresh" disabled={recLoading}>
-              <Ionicons
+              <Icon
                 name={recLoading ? 'sync' : 'sparkles-outline'}
                 size={14}
                 color={theme.colors.neon}

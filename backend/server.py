@@ -103,10 +103,17 @@ async def chat_jarvis(req: ChatRequest):
     user_msg = ChatMessage(session_id=req.session_id, role="user", content=req.message)
     await db.chat_messages.insert_one(user_msg.model_dump())
 
+    # Personalize: use the user's real name if provided.
+    name = (req.user_name or "").strip() or "Architect"
+    sys_msg = JARVIS_SYSTEM + (
+        f"\n\nIMPORTANT: The user's name is '{name}'. Address them as '{name}' "
+        f"(or occasionally 'sir/ma'am'). Do not call them 'Architect' unless that IS their name."
+    )
+
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=req.session_id,
-        system_message=JARVIS_SYSTEM,
+        system_message=sys_msg,
     ).with_model("anthropic", CLAUDE_MODEL)
 
     try:

@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, Switch, ScrollView, Alert, ActivityIndicator,
+  View, Text, StyleSheet, Pressable, Switch, ScrollView, Alert, ActivityIndicator, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
@@ -12,6 +12,7 @@ import * as Speech from 'expo-speech';
 import { theme, API } from '../constants/theme';
 import {
   VOICE_OPTIONS, VoiceId, getVoice, setVoice, getNarrate, setNarrate,
+  getArchitectName, setArchitectName, setSession, clearInceptionAuth,
 } from '../lib/prefs';
 
 export default function SettingsScreen() {
@@ -20,13 +21,41 @@ export default function SettingsScreen() {
   const [voice, setVoiceState] = useState<VoiceId>('system');
   const [animOn, setAnimOn] = useState(true);
   const [testing, setTesting] = useState<VoiceId | null>(null);
+  const [name, setName] = useState('');
+  const [nameDraft, setNameDraft] = useState('');
 
   useEffect(() => {
     (async () => {
       setVoiceState(await getVoice());
       setVoiceOn(await getNarrate());
+      const n = await getArchitectName();
+      setName(n);
+      setNameDraft(n);
     })();
   }, []);
+
+  const saveName = async () => {
+    const t = nameDraft.trim();
+    if (t.length < 2) { Alert.alert('Too short', 'Name must be at least 2 chars.'); return; }
+    await setArchitectName(t);
+    setName(t);
+    Alert.alert('Saved', `JARVIS will now address you as "${t}".`);
+  };
+
+  const signOut = async () => {
+    await setSession(false);
+    router.replace('/login');
+  };
+
+  const resetIdentity = () => {
+    Alert.alert('Reset Identity?', 'This wipes your name and PIN. You will need to re-enroll.', [
+      { text: 'Cancel' },
+      { text: 'WIPE', style: 'destructive', onPress: async () => {
+        await clearInceptionAuth();
+        router.replace('/login');
+      }},
+    ]);
+  };
 
   const playSample = async (v: VoiceId) => {
     setTesting(v);
@@ -81,6 +110,38 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>IDENTITY</Text>
+          <Text style={styles.rowLabel}>The name JARVIS uses for you</Text>
+          <View style={styles.nameRow}>
+            <TextInput
+              style={styles.nameInput}
+              value={nameDraft}
+              onChangeText={setNameDraft}
+              placeholder="Your name"
+              placeholderTextColor={theme.colors.textTertiary}
+              autoCapitalize="words"
+              maxLength={32}
+              testID="settings-name"
+            />
+            <Pressable onPress={saveName} style={styles.saveBtn} testID="settings-save-name">
+              <Text style={styles.saveBtnText}>SAVE</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.rowHint}>Currently: {name || '(not set)'}</Text>
+
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+            <Pressable onPress={signOut} style={[styles.actionBtn, { borderColor: theme.colors.blue }]} testID="settings-signout">
+              <Icon name="log-out-outline" size={14} color={theme.colors.blue} />
+              <Text style={[styles.actionBtnText, { color: theme.colors.blue }]}>SIGN OUT</Text>
+            </Pressable>
+            <Pressable onPress={resetIdentity} style={[styles.actionBtn, { borderColor: theme.colors.danger }]} testID="settings-reset">
+              <Icon name="trash-outline" size={14} color={theme.colors.danger} />
+              <Text style={[styles.actionBtnText, { color: theme.colors.danger }]}>RESET PIN</Text>
+            </Pressable>
+          </View>
+        </View>
+
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>JARVIS VOICE</Text>
           <View style={styles.row}>
@@ -203,4 +264,20 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   linkHint: { color: theme.colors.textTertiary, fontFamily: theme.fonts.body, fontSize: 12, marginTop: 4 },
   aboutText: { color: theme.colors.textSecondary, fontFamily: theme.fonts.body, fontSize: 12, lineHeight: 20 },
+  nameRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  nameInput: {
+    flex: 1, color: theme.colors.text, fontFamily: theme.fonts.bodyBold, fontSize: 14,
+    backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border,
+    borderRadius: theme.radius.md, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  saveBtn: {
+    backgroundColor: theme.colors.neon, paddingHorizontal: 16, justifyContent: 'center',
+    borderRadius: theme.radius.md,
+  },
+  saveBtnText: { color: theme.colors.bg, fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
+  actionBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: theme.radius.md, borderWidth: 1,
+  },
+  actionBtnText: { fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
 });

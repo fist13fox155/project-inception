@@ -100,7 +100,7 @@ export default function LibraryScreen() {
                 <View style={[styles.iconBox, {
                   borderColor: d.format === 'pdf' ? 'rgba(0,255,102,0.4)' : 'rgba(0,229,255,0.4)',
                 }]}>
-                  <Ionicons
+                  <Icon
                     name={d.format === 'pdf' ? 'document-text-outline' : 'easel-outline'}
                     size={22}
                     color={d.format === 'pdf' ? theme.colors.green : theme.colors.blue}

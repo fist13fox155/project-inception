@@ -1,6 +1,10 @@
 /**
  * Project Inception — Home Dashboard
- * Header (logo + LIVE), stock tickers row, JARVIS orb + greeting bubble, action cards.
+ * - Login gate redirects to /login if no PIN session
+ * - Ethereal cyan pulsing orb background
+ * - 3x3 stock grid with auto-cleanup of invalid tickers
+ * - Personalized greeting using Architect name
+ * - Live news ticker (stocks + crisis headlines)
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -19,47 +23,93 @@ import * as Speech from 'expo-speech';
 import { theme, API } from '../constants/theme';
 import JarvisOrb from '../components/JarvisOrb';
 import StockTickerCard, { Quote } from '../components/StockTickerCard';
+import EtherealOrbBackground from '../components/EtherealOrbBackground';
+import NewsTicker from '../components/NewsTicker';
+import {
+  isAuthenticated, getArchitectName, clearInceptionAuth, setSession,
+} from '../lib/prefs';
 
-const DEFAULT_SYMBOLS = ['AAPL', 'TSLA', 'NVDA'];
+const DEFAULT_SYMBOLS = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'AMZN'];
 const USER_ID = 'local-user';
 
 const ACTIONS = [
   { key: 'document', label1: 'CREATE', label2: 'DOCUMENT', icon: 'document-text-outline' as const, color: theme.colors.green, glow: theme.colors.glowGreen, route: '/document' },
-  { key: 'stocks', label1: 'STOCK', label2: 'TRACKER', icon: 'bar-chart-outline' as const, color: theme.colors.blue, glow: theme.colors.glowBlue, route: '/stocks' },
+  { key: 'stocks', label1: 'STOCK', label2: 'BROWSE', icon: 'bar-chart-outline' as const, color: theme.colors.blue, glow: theme.colors.glowBlue, route: '/stocks/browse' },
   { key: 'jarvis', label1: 'TALK TO', label2: 'JARVIS', icon: 'chatbubbles-outline' as const, color: theme.colors.purple, glow: theme.colors.glowPurple, route: '/chat' },
 ];
 
 export default function Home() {
   const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+  const [architect, setArchitect] = useState('Architect');
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [greeting, setGreeting] = useState('Good morning Architect.\nMarkets coming online…\nReady to build your pitch deck?');
+  const [greeting, setGreeting] = useState('Standing by.');
   const [voiceMode, setVoiceMode] = useState(false);
+
+  // AUTH GATE
+  useEffect(() => {
+    (async () => {
+      const ok = await isAuthenticated();
+      if (!ok) {
+        router.replace('/login');
+        return;
+      }
+      const n = await getArchitectName();
+      if (n) setArchitect(n);
+      setAuthChecked(true);
+    })();
+  }, []);
 
   const fetchQuotes = useCallback(async () => {
     try {
-      // Load user watchlist first
       const wRes = await fetch(`${API}/watchlist/${USER_ID}`);
       const wJson = await wRes.json();
-      const syms = (wJson.symbols && wJson.symbols.length ? wJson.symbols : DEFAULT_SYMBOLS).slice(0, 9);
-      const r = await fetch(`${API}/stocks/quotes?symbols=${syms.join(',')}`);
+      const stored: string[] = (wJson.symbols && wJson.symbols.length ? wJson.symbols : DEFAULT_SYMBOLS).slice(0, 9);
+
+      const r = await fetch(`${API}/stocks/quotes?symbols=${stored.join(',')}`);
       const j = await r.json();
-      setQuotes(j.quotes || []);
-      const avg = (j.quotes || []).reduce((s: number, q: Quote) => s + q.change_pct, 0) / Math.max(1, (j.quotes || []).length);
+
+      // Filter out insane / corrupt values — guard against bad Finnhub responses
+      const sane: Quote[] = (j.quotes || []).filter((q: Quote) =>
+        q && typeof q.price === 'number' && q.price > 0 && q.price < 1_000_000 &&
+        typeof q.change_pct === 'number' && Math.abs(q.change_pct) < 100 &&
+        Array.isArray(q.sparkline) && q.sparkline.length > 1
+      );
+      setQuotes(sane);
+
+      // Auto-clean watchlist: remove tickers that came back invalid or insane
+      const validSymbols = new Set(sane.map(q => q.symbol));
+      const invalid: string[] = j.invalid || [];
+      const insane = (j.quotes || []).filter((q: Quote) => !validSymbols.has(q.symbol)).map((q: Quote) => q.symbol);
+      const toRemove = new Set([...invalid, ...insane]);
+      if (toRemove.size && stored.some(s => toRemove.has(s))) {
+        const cleaned = stored.filter(s => !toRemove.has(s));
+        await fetch(`${API}/watchlist`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: USER_ID, symbols: cleaned }),
+        });
+      }
+
+      const avg = sane.reduce((s, q) => s + q.change_pct, 0) / Math.max(1, sane.length);
       const dir = avg >= 0 ? 'up' : 'down';
       const hour = new Date().getHours();
       const tod = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
-      setGreeting(`Good ${tod} Architect.\nMarkets are ${dir} ${Math.abs(avg).toFixed(1)} percent today.\nReady to build your pitch deck?`);
+      setGreeting(
+        `Good ${tod} ${architect}.\nMarkets are ${dir} ${Math.abs(avg).toFixed(1)} percent today.\nReady to build your pitch deck?`
+      );
     } catch (e) {
       console.warn('fetch quotes', e);
+      setGreeting(`Standing by, ${architect}. Markets feed momentarily offline.`);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [architect]);
 
-  useEffect(() => { fetchQuotes(); }, [fetchQuotes]);
+  useEffect(() => { if (authChecked) fetchQuotes(); }, [authChecked, fetchQuotes]);
 
   const onRefresh = () => { setRefreshing(true); fetchQuotes(); };
 
@@ -73,16 +123,31 @@ export default function Home() {
     }
   };
 
+  const logout = async () => {
+    await setSession(false);
+    router.replace('/login');
+  };
+
+  if (!authChecked) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <EtherealOrbBackground />
+        <ActivityIndicator color={theme.colors.blue} style={{ marginTop: 120 }} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <EtherealOrbBackground />
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl tintColor={theme.colors.neon} refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl tintColor={theme.colors.blue} refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <Icon name="globe-outline" size={22} color={theme.colors.text} />
+            <Icon name="globe-outline" size={22} color={theme.colors.blue} />
             <Text style={styles.logoText}>PROJECT INCEPTION</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -98,13 +163,19 @@ export default function Home() {
               <View style={styles.liveDot} />
               <Text style={styles.liveText}>LIVE</Text>
             </View>
+            <Pressable onPress={logout} testID="logout" style={styles.iconBtnSmall}>
+              <Icon name="log-out-outline" size={14} color={theme.colors.textTertiary} />
+            </Pressable>
           </View>
         </View>
+
+        {/* News + Stocks ticker */}
+        <NewsTicker quotes={quotes} />
 
         {/* Stock Tickers - 3x3 grid */}
         {loading ? (
           <View style={styles.loaderBox}>
-            <ActivityIndicator color={theme.colors.neon} />
+            <ActivityIndicator color={theme.colors.blue} />
           </View>
         ) : (
           <View style={styles.tickerGrid}>
@@ -116,11 +187,13 @@ export default function Home() {
             {quotes.length < 9 && (
               <Pressable
                 onPress={() => router.push('/stocks/browse' as any)}
-                style={[styles.tickerCell, styles.addTile]}
+                style={[styles.tickerCell, styles.addTileWrap]}
                 testID="add-stock-tile"
               >
-                <Icon name="add-circle-outline" size={26} color={theme.colors.neon} />
-                <Text style={styles.addTileText}>ADD STOCK</Text>
+                <View style={styles.addTile}>
+                  <Icon name="add-circle-outline" size={26} color={theme.colors.blue} />
+                  <Text style={styles.addTileText}>ADD STOCK</Text>
+                </View>
               </Pressable>
             )}
           </View>
@@ -128,13 +201,13 @@ export default function Home() {
 
         {/* JARVIS Greeting */}
         <Pressable onPress={speakGreeting} style={styles.jarvisSection} testID="jarvis-greeting">
-          <JarvisOrb size={110} speaking={voiceMode} />
+          <JarvisOrb size={110} color={theme.colors.blue} speaking={voiceMode} />
           <View style={styles.bubble}>
             <View style={styles.bubbleTail} />
             <Text style={styles.jarvisLabel}>JARVIS</Text>
             <Text style={styles.bubbleText}>{greeting}</Text>
             <View style={styles.bubbleActions}>
-              <Icon name={voiceMode ? 'volume-high' : 'volume-mute'} size={14} color={theme.colors.neon} />
+              <Icon name={voiceMode ? 'volume-high' : 'volume-mute'} size={14} color={theme.colors.blue} />
               <Text style={styles.bubbleHint}>{voiceMode ? 'NARRATING' : 'TAP TO HEAR'}</Text>
             </View>
           </View>
@@ -183,7 +256,7 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  safe: { flex: 1, backgroundColor: '#000814' },
   scroll: { paddingHorizontal: 16, paddingBottom: 32 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -200,12 +273,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: theme.radius.full,
-    backgroundColor: 'rgba(0,255,102,0.08)',
+    backgroundColor: 'rgba(0,229,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(0,255,102,0.25)',
+    borderColor: 'rgba(0,229,255,0.35)',
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.green },
-  liveText: { color: theme.colors.green, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.blue },
+  liveText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   dagrBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 8, paddingVertical: 4,
@@ -214,27 +287,21 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,51,51,0.35)',
   },
   dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
-  tickerRow: { flexDirection: 'row', marginHorizontal: -4, marginTop: 4 },
+  iconBtnSmall: { padding: 4 },
   tickerGrid: {
     flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, marginHorizontal: -4,
   },
   tickerCell: { width: '33.333%', padding: 4 },
+  addTileWrap: { },
   addTile: {
     height: 80, alignItems: 'center', justifyContent: 'center', gap: 4,
-    backgroundColor: 'rgba(212,255,0,0.04)', borderWidth: 1, borderStyle: 'dashed',
-    borderColor: 'rgba(212,255,0,0.4)', borderRadius: theme.radius.md, marginHorizontal: 4,
+    backgroundColor: 'rgba(0,229,255,0.06)', borderWidth: 1, borderStyle: 'dashed',
+    borderColor: 'rgba(0,229,255,0.5)', borderRadius: theme.radius.md,
   },
-  addTileText: { color: theme.colors.neon, fontFamily: theme.fonts.bodyBold, fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
-  loaderBox: { flex: 1, height: 84, alignItems: 'center', justifyContent: 'center', minWidth: 200 },
-  browseTile: {
-    width: 130, height: 84, marginHorizontal: 4,
-    backgroundColor: 'rgba(212,255,0,0.05)', borderWidth: 1,
-    borderColor: 'rgba(212,255,0,0.4)', borderStyle: 'dashed',
-    borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center', gap: 4,
-  },
-  browseTileText: { color: theme.colors.neon, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, textAlign: 'center' },
+  addTileText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
+  loaderBox: { height: 84, alignItems: 'center', justifyContent: 'center' },
   jarvisSection: {
-    marginTop: 32,
+    marginTop: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
@@ -242,15 +309,15 @@ const styles = StyleSheet.create({
   },
   bubble: {
     flex: 1,
-    backgroundColor: theme.colors.surfaceElevated,
-    borderColor: 'rgba(212,255,0,0.25)',
+    backgroundColor: 'rgba(0,8,20,0.7)',
+    borderColor: 'rgba(0,229,255,0.35)',
     borderWidth: 1,
     borderRadius: theme.radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    shadowColor: theme.colors.neon,
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
+    shadowColor: theme.colors.blue,
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 },
   },
   bubbleTail: {
@@ -258,31 +325,31 @@ const styles = StyleSheet.create({
     left: -7,
     top: 28,
     width: 14, height: 14,
-    backgroundColor: theme.colors.surfaceElevated,
+    backgroundColor: 'rgba(0,8,20,0.7)',
     borderLeftWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(212,255,0,0.25)',
+    borderColor: 'rgba(0,229,255,0.35)',
     transform: [{ rotate: '45deg' }],
   },
   jarvisLabel: {
-    color: theme.colors.neon,
+    color: theme.colors.blue,
     fontFamily: theme.fonts.bodyBold,
     fontSize: 10,
     letterSpacing: 2,
     marginBottom: 6,
   },
   bubbleText: {
-    color: theme.colors.neon,
+    color: theme.colors.text,
     fontFamily: theme.fonts.body,
     fontSize: 14,
     lineHeight: 20,
   },
   bubbleActions: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   bubbleHint: { color: theme.colors.textTertiary, fontSize: 9, letterSpacing: 1.5, fontFamily: theme.fonts.bodyBold },
-  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 28 },
+  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 24 },
   actionCard: {
     flex: 1,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: 'rgba(0,8,20,0.55)',
     borderWidth: 1,
     borderRadius: theme.radius.lg,
     paddingVertical: 18,
@@ -308,10 +375,10 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 28,
+    marginTop: 24,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    borderTopColor: 'rgba(0,229,255,0.18)',
   },
   navBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16 },
   navText: { color: theme.colors.textSecondary, fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },

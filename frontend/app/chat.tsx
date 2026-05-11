@@ -12,9 +12,10 @@ import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
 import { theme, API } from '../constants/theme';
 import JarvisOrb from '../components/JarvisOrb';
-import { getVoice } from '../lib/prefs';
+import { getVoice, getArchitectName } from '../lib/prefs';
 
 type Msg = { id: string; role: 'user' | 'assistant'; content: string };
 
@@ -22,14 +23,29 @@ const SESSION = `jarvis-${Date.now()}`;
 
 export default function ChatScreen() {
   const router = useRouter();
+  const [userName, setUserName] = useState('');
   const [messages, setMessages] = useState<Msg[]>([
-    { id: 'sys', role: 'assistant', content: 'Standing by, Architect. How may I assist?' },
+    { id: 'sys', role: 'assistant', content: 'Standing by. How may I assist?' },
   ]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    (async () => {
+      const n = await getArchitectName();
+      if (n) {
+        setUserName(n);
+        setMessages([{
+          id: 'sys',
+          role: 'assistant',
+          content: `Standing by, ${n}. How may I assist?`,
+        }]);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
@@ -45,7 +61,7 @@ export default function ChatScreen() {
       const r = await fetch(`${API}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: SESSION, message: text }),
+        body: JSON.stringify({ session_id: SESSION, message: text, user_name: userName }),
       });
       const j = await r.json();
       const reply = j.reply || 'Comms degraded. Standby.';
@@ -78,17 +94,19 @@ export default function ChatScreen() {
       });
       const j = await r.json();
       if (!j.audio_b64) throw new Error('no audio');
-      const FileSystem = await import('expo-file-system/legacy');
-      const path = (FileSystem.cacheDirectory || FileSystem.documentDirectory || '') + `chat_${m.id}.mp3`;
+      const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+      const path = `${dir}chat_${m.id}.mp3`;
       await FileSystem.writeAsStringAsync(path, j.audio_b64, { encoding: FileSystem.EncodingType.Base64 });
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const sound = new Audio.Sound();
-      await sound.loadAsync({ uri: path });
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate(s => {
-        if ((s as any).didJustFinish) { setSpeakingId(null); sound.unloadAsync().catch(() => {}); }
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: path },
+        { shouldPlay: true, volume: 1.0 }
+      );
+      sound.setOnPlaybackStatusUpdate((s: any) => {
+        if (s.didJustFinish) { setSpeakingId(null); sound.unloadAsync().catch(() => {}); }
       });
-    } catch {
+    } catch (e) {
+      console.warn('TTS playback failed', e);
       setSpeakingId(null);
       Speech.speak(m.content, { rate: 0.97, onDone: () => setSpeakingId(null) });
     }
@@ -167,7 +185,7 @@ export default function ChatScreen() {
                 </Text>
                 {m.role === 'assistant' && (
                   <Pressable onPress={() => speakMsg(m)} style={styles.speakBtn} testID={`speak-${m.id}`}>
-                    <Ionicons
+                    <Icon
                       name={speakingId === m.id ? 'volume-high' : 'volume-medium-outline'}
                       size={14}
                       color={theme.colors.neon}
