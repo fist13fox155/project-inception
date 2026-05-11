@@ -5,6 +5,14 @@
 import nacl from 'tweetnacl';
 import naclUtil from 'tweetnacl-util';
 import * as SecureStore from 'expo-secure-store';
+import * as ExpoCrypto from 'expo-crypto';
+
+// CRITICAL: tweetnacl needs a secure PRNG. React Native doesn't ship one
+// by default — wire up expo-crypto's getRandomBytes synchronously.
+nacl.setPRNG((x: Uint8Array, n: number) => {
+  const bytes = ExpoCrypto.getRandomBytes(n);
+  for (let i = 0; i < n; i++) x[i] = bytes[i];
+});
 
 const PRIV_KEY = 'dagr_priv_key';
 const PUB_KEY = 'dagr_pub_key';

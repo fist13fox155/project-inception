@@ -29,6 +29,15 @@ export default function StocksScreen() {
       const r = await fetch(`${API}/stocks/quotes?symbols=${syms.join(',')}`);
       const j = await r.json();
       setQuotes(j.quotes || []);
+      // Drop invalid tickers from watchlist automatically
+      if (j.invalid && j.invalid.length) {
+        const valid = syms.filter(s => !j.invalid.includes(s));
+        if (valid.length !== syms.length) {
+          setSymbols(valid);
+          await saveWatchlist(valid);
+          Alert.alert('Invalid tickers removed', `${j.invalid.join(', ')} not recognized.`);
+        }
+      }
     } catch (e) { console.warn('quotes', e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -56,6 +65,15 @@ export default function StocksScreen() {
   const add = async () => {
     const s = addSym.trim().toUpperCase();
     if (!s || symbols.includes(s)) { setAddSym(''); return; }
+    // Validate ticker first
+    try {
+      const v = await fetch(`${API}/stocks/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: s }),
+      });
+      const j = await v.json();
+      if (!j.valid) { Alert.alert('Invalid ticker', `${s}: ${j.reason}`); return; }
+    } catch {}
     const next = [...symbols, s];
     setSymbols(next); setAddSym('');
     await saveWatchlist(next); load(next);

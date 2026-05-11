@@ -23,12 +23,21 @@ export default function SettingsScreen() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: 'Greetings Architect. Premium narration is operational.', voice: 'nova' }),
         });
+        if (!r.ok) throw new Error(`Server ${r.status}`);
         const j = await r.json();
-        if (!j.audio_b64) throw new Error('No audio');
+        if (!j.audio_b64) throw new Error('No audio returned');
+        // Write to a temp file — data: URIs are flaky on mobile expo-av
+        const FileSystem = await import('expo-file-system/legacy');
+        const path = (FileSystem.cacheDirectory || FileSystem.documentDirectory || '') + `tts_${Date.now()}.mp3`;
+        await FileSystem.writeAsStringAsync(path, j.audio_b64, { encoding: FileSystem.EncodingType.Base64 });
         const { Audio } = await import('expo-av');
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
         const sound = new Audio.Sound();
-        await sound.loadAsync({ uri: `data:audio/mpeg;base64,${j.audio_b64}` });
+        await sound.loadAsync({ uri: path });
         await sound.playAsync();
+        sound.setOnPlaybackStatusUpdate(s => {
+          if ((s as any).didJustFinish) sound.unloadAsync().catch(() => {});
+        });
       } catch (e: any) {
         Alert.alert('Premium voice unavailable', String(e?.message || e));
       }

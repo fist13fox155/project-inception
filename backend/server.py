@@ -257,10 +257,39 @@ async def get_quotes(symbols: str = ",".join(DEFAULT_WATCHLIST)):
     """Returns batch quotes with sparkline. symbols=AAPL,TSLA,..."""
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     out = []
+    invalid = []
     for sym in syms:
         live = await _live_quote(sym)
-        out.append(live if live else _mock_quote(sym))
-    return {"quotes": out}
+        if live:
+            out.append(live)
+        else:
+            invalid.append(sym)
+    return {"quotes": out, "invalid": invalid}
+
+
+class ValidateSymbol(BaseModel):
+    symbol: str
+
+
+@api.post("/stocks/validate")
+async def validate_symbol(s: ValidateSymbol):
+    """Check whether a ticker exists & is tradable via Finnhub."""
+    sym = s.symbol.strip().upper()
+    if not sym:
+        return {"symbol": sym, "valid": False, "reason": "Empty"}
+    if not FINNHUB_KEY:
+        return {"symbol": sym, "valid": True, "reason": "no key (assume ok)"}
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get("https://finnhub.io/api/v1/quote",
+                            params={"symbol": sym, "token": FINNHUB_KEY})
+            r.raise_for_status()
+            q = r.json()
+        price = float(q.get("c") or 0)
+        return {"symbol": sym, "valid": price > 0, "price": price,
+                "reason": "OK" if price > 0 else "No price returned (likely invalid ticker)"}
+    except Exception as e:
+        return {"symbol": sym, "valid": False, "reason": str(e)}
 
 
 @api.get("/stocks/intraday/{symbol}")
@@ -411,30 +440,42 @@ class DocRecord(BaseModel):
 
 
 async def _ai_outline(prompt: str, fmt: str) -> dict:
-    """Ask Claude to produce a structured outline for the doc."""
-    fmt_hint = (
-        "Produce a PowerPoint outline with 5-8 slides. Each slide has a title and 3-5 bullet points."
-        if fmt == "pptx"
-        else "Produce a PDF outline with a title, an executive summary paragraph, "
-             "and 4-6 sections. Each section has a heading and 2-4 short paragraphs."
-    )
-    instructions = (
-        f"Build content based on this user prompt:\n\"\"\"{prompt}\"\"\"\n\n"
-        f"{fmt_hint}\n\n"
-        "CRITICAL: Return ONLY valid minified JSON (no markdown fences). "
-        "Inside string values, use only straight ASCII quotes and escape any internal double quotes with backslash. "
-        "Avoid smart/curly quotes and avoid apostrophes that would break parsing. Schema:\n"
-        '{"title":"...","subtitle":"...",'
-        '"slides":[{"title":"...","bullets":["..."]}] ,'
-        '"sections":[{"heading":"...","paragraphs":["..."]}],'
-        '"summary":"..."}'
-    )
-
-    def _smart_quote_normalize(s: str) -> str:
-        return (
-            s.replace("\u2018", "'").replace("\u2019", "'")
-             .replace("\u201c", '"').replace("\u201d", '"')
-             .replace("\u2013", "-").replace("\u2014", "-")
+    """Ask Claude for structured plaintext (NOT JSON) — far more reliable."""
+    if fmt == "pptx":
+        instructions = (
+            f"User prompt:\n\"\"\"{prompt}\"\"\"\n\n"
+            "Produce a PowerPoint outline of 5-8 slides. "
+            "Output STRICT plain text in this exact format (no JSON, no markdown fences):\n\n"
+            "TITLE: <document title>\n"
+            "SUBTITLE: <one line>\n"
+            "\n"
+            "SLIDE: <slide 1 title>\n"
+            "- <bullet point 1>\n"
+            "- <bullet point 2>\n"
+            "- <bullet point 3>\n"
+            "\n"
+            "SLIDE: <slide 2 title>\n"
+            "- <bullet>\n"
+            "...\n"
+            "End with no trailing text. Each slide has 3-5 bullet points."
+        )
+    else:
+        instructions = (
+            f"User prompt:\n\"\"\"{prompt}\"\"\"\n\n"
+            "Produce a PDF report outline. "
+            "Output STRICT plain text in this exact format (no JSON, no markdown fences):\n\n"
+            "TITLE: <document title>\n"
+            "SUBTITLE: <one line>\n"
+            "SUMMARY: <one paragraph executive summary>\n"
+            "\n"
+            "SECTION: <section 1 heading>\n"
+            "PARA: <first paragraph>\n"
+            "PARA: <second paragraph>\n"
+            "\n"
+            "SECTION: <section 2 heading>\n"
+            "PARA: <paragraph>\n"
+            "...\n"
+            "Use 4-6 sections, each 2-4 short paragraphs. No trailing notes."
         )
 
     last_err = None
@@ -443,23 +484,58 @@ async def _ai_outline(prompt: str, fmt: str) -> dict:
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
                 session_id=f"doc-{uuid.uuid4().hex[:8]}",
-                system_message="You are JARVIS, a precise content architect. Return only valid JSON. Never use smart quotes.",
+                system_message="You are JARVIS, a content architect. Follow the requested plain-text format exactly. No code fences, no JSON.",
             ).with_model("anthropic", CLAUDE_MODEL)
             reply = await chat.send_message(UserMessage(text=instructions))
-            reply = _smart_quote_normalize(reply)
-            match = re.search(r"\{.*\}", reply, re.S)
-            if not match:
-                raise ValueError("No JSON found")
-            return json.loads(match.group(0))
-        except json.JSONDecodeError as e:
-            last_err = e
-            logger.warning(f"outline JSON parse failed attempt {attempt+1}: {e}")
-            continue
+            return _parse_marker_outline(reply, fmt)
         except Exception as e:
             last_err = e
             logger.warning(f"outline gen failed attempt {attempt+1}: {e}")
             continue
-    raise HTTPException(500, f"Could not generate clean outline after 3 tries: {last_err}")
+    raise HTTPException(500, f"Could not generate outline after 3 tries: {last_err}")
+
+
+def _parse_marker_outline(text: str, fmt: str) -> dict:
+    """Parse the TITLE/SLIDE/SECTION/PARA marker format. Robust to quotes & punctuation."""
+    lines = [l.strip() for l in text.splitlines()]
+    out: dict = {"title": "", "subtitle": "", "summary": "", "slides": [], "sections": []}
+    cur_slide = None
+    cur_section = None
+    for line in lines:
+        if not line:
+            continue
+        up = line.upper()
+        if up.startswith("TITLE:"):
+            out["title"] = line.split(":", 1)[1].strip()
+            cur_slide = None; cur_section = None
+        elif up.startswith("SUBTITLE:"):
+            out["subtitle"] = line.split(":", 1)[1].strip()
+        elif up.startswith("SUMMARY:"):
+            out["summary"] = line.split(":", 1)[1].strip()
+        elif up.startswith("SLIDE:"):
+            cur_slide = {"title": line.split(":", 1)[1].strip(), "bullets": []}
+            out["slides"].append(cur_slide)
+            cur_section = None
+        elif up.startswith("SECTION:"):
+            cur_section = {"heading": line.split(":", 1)[1].strip(), "paragraphs": []}
+            out["sections"].append(cur_section)
+            cur_slide = None
+        elif line.startswith("- ") and cur_slide is not None:
+            cur_slide["bullets"].append(line[2:].strip())
+        elif up.startswith("PARA:") and cur_section is not None:
+            cur_section["paragraphs"].append(line.split(":", 1)[1].strip())
+        elif cur_section is not None and line:
+            # Append continuation to last paragraph
+            if cur_section["paragraphs"]:
+                cur_section["paragraphs"][-1] += " " + line
+            else:
+                cur_section["paragraphs"].append(line)
+        elif cur_slide is not None and line:
+            # Treat plain line as bullet
+            cur_slide["bullets"].append(line)
+    if not out["title"]:
+        out["title"] = "Untitled Document"
+    return out
 
 
 def _build_pdf(outline: dict) -> bytes:
