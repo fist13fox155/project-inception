@@ -14,6 +14,7 @@ import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import { theme, API } from '../constants/theme';
 import JarvisOrb from '../components/JarvisOrb';
+import { getVoice } from '../lib/prefs';
 
 type Msg = { id: string; role: 'user' | 'assistant'; content: string };
 
@@ -57,15 +58,40 @@ export default function ChatScreen() {
     }
   };
 
-  const speakMsg = (m: Msg) => {
+  const speakMsg = async (m: Msg) => {
     Speech.stop();
     if (speakingId === m.id) { setSpeakingId(null); return; }
     setSpeakingId(m.id);
-    Speech.speak(m.content, {
-      rate: 0.97,
-      onDone: () => setSpeakingId(null),
-      onStopped: () => setSpeakingId(null),
-    });
+    const v = await getVoice();
+    if (v === 'system') {
+      Speech.speak(m.content, {
+        rate: 0.97,
+        onDone: () => setSpeakingId(null),
+        onStopped: () => setSpeakingId(null),
+      });
+      return;
+    }
+    try {
+      const r = await fetch(`${API}/tts`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: m.content, voice: v }),
+      });
+      const j = await r.json();
+      if (!j.audio_b64) throw new Error('no audio');
+      const FileSystem = await import('expo-file-system/legacy');
+      const path = (FileSystem.cacheDirectory || FileSystem.documentDirectory || '') + `chat_${m.id}.mp3`;
+      await FileSystem.writeAsStringAsync(path, j.audio_b64, { encoding: FileSystem.EncodingType.Base64 });
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const sound = new Audio.Sound();
+      await sound.loadAsync({ uri: path });
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate(s => {
+        if ((s as any).didJustFinish) { setSpeakingId(null); sound.unloadAsync().catch(() => {}); }
+      });
+    } catch {
+      setSpeakingId(null);
+      Speech.speak(m.content, { rate: 0.97, onDone: () => setSpeakingId(null) });
+    }
   };
 
   const startRecording = async () => {

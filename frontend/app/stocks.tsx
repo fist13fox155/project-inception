@@ -92,7 +92,9 @@ export default function StocksScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
         </Pressable>
         <Text style={styles.title}>STOCK TRACKER</Text>
-        <View style={{ width: 24 }} />
+        <Pressable onPress={() => router.push('/stocks/browse' as any)} testID="stocks-browse-btn" style={styles.iconBtn}>
+          <Ionicons name="search" size={20} color={theme.colors.neon} />
+        </Pressable>
       </View>
 
       <View style={styles.addRow}>

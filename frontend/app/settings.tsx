@@ -1,49 +1,73 @@
 /**
- * Settings & Accessibility — voice narration toggle, watchlist info, about.
- * Test ALL elements with TTS for blind users.
+ * Settings & Accessibility — voice picker, narration, watchlist, about.
  */
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Switch, ScrollView, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View, Text, StyleSheet, Pressable, Switch, ScrollView, Alert, ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { theme, API } from '../constants/theme';
+import {
+  VOICE_OPTIONS, VoiceId, getVoice, setVoice, getNarrate, setNarrate,
+} from '../lib/prefs';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const [voiceOn, setVoiceOn] = useState(true);
-  const [premiumVoice, setPremiumVoice] = useState(false);
+  const [voice, setVoiceState] = useState<VoiceId>('system');
   const [animOn, setAnimOn] = useState(true);
+  const [testing, setTesting] = useState<VoiceId | null>(null);
 
-  const testVoice = async () => {
-    if (premiumVoice) {
-      try {
-        const r = await fetch(`${API}/tts`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: 'Greetings Architect. Premium narration is operational.', voice: 'nova' }),
-        });
-        if (!r.ok) throw new Error(`Server ${r.status}`);
-        const j = await r.json();
-        if (!j.audio_b64) throw new Error('No audio returned');
-        // Write to a temp file — data: URIs are flaky on mobile expo-av
-        const FileSystem = await import('expo-file-system/legacy');
-        const path = (FileSystem.cacheDirectory || FileSystem.documentDirectory || '') + `tts_${Date.now()}.mp3`;
-        await FileSystem.writeAsStringAsync(path, j.audio_b64, { encoding: FileSystem.EncodingType.Base64 });
-        const { Audio } = await import('expo-av');
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-        const sound = new Audio.Sound();
-        await sound.loadAsync({ uri: path });
-        await sound.playAsync();
-        sound.setOnPlaybackStatusUpdate(s => {
-          if ((s as any).didJustFinish) sound.unloadAsync().catch(() => {});
-        });
-      } catch (e: any) {
-        Alert.alert('Premium voice unavailable', String(e?.message || e));
+  useEffect(() => {
+    (async () => {
+      setVoiceState(await getVoice());
+      setVoiceOn(await getNarrate());
+    })();
+  }, []);
+
+  const playSample = async (v: VoiceId) => {
+    setTesting(v);
+    const sample = v === 'system'
+      ? 'Greetings Architect. System voice ready.'
+      : `Greetings Architect. ${v.toUpperCase()} voice is operational.`;
+    try {
+      if (v === 'system') {
+        Speech.stop();
+        Speech.speak(sample, { rate: 0.95 });
+        setTimeout(() => setTesting(null), 2500);
+        return;
       }
-    } else {
-      Speech.speak('Greetings Architect. Voice narration is now active.', { rate: 0.95 });
+      const r = await fetch(`${API}/tts`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: sample, voice: v }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      if (!j.audio_b64) throw new Error('No audio');
+      const FileSystem = await import('expo-file-system/legacy');
+      const path = (FileSystem.cacheDirectory || FileSystem.documentDirectory || '') + `voice_${v}.mp3`;
+      await FileSystem.writeAsStringAsync(path, j.audio_b64, { encoding: FileSystem.EncodingType.Base64 });
+      const { Audio } = await import('expo-av');
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const sound = new Audio.Sound();
+      await sound.loadAsync({ uri: path });
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate(s => {
+        if ((s as any).didJustFinish) { setTesting(null); sound.unloadAsync().catch(() => {}); }
+      });
+    } catch (e: any) {
+      setTesting(null);
+      Alert.alert('Voice unavailable', String(e?.message || e));
     }
+  };
+
+  const pickVoice = async (v: VoiceId) => {
+    setVoiceState(v);
+    await setVoice(v);
+    playSample(v);
   };
 
   return (
@@ -58,25 +82,71 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>ACCESSIBILITY</Text>
-          <Row label="Voice Narration" hint="Read content aloud" value={voiceOn} onChange={setVoiceOn} testID="toggle-voice" />
-          <Row label="Premium Voice (OpenAI)" hint="High-quality TTS" value={premiumVoice} onChange={setPremiumVoice} testID="toggle-premium" />
-          <Pressable onPress={testVoice} style={styles.testBtn} testID="test-voice-btn">
-            <Ionicons name="volume-high-outline" size={16} color={theme.colors.neon} />
-            <Text style={styles.testText}>TEST VOICE</Text>
-          </Pressable>
+          <Text style={styles.sectionLabel}>JARVIS VOICE</Text>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Voice Narration</Text>
+              <Text style={styles.rowHint}>Read content aloud throughout app</Text>
+            </View>
+            <Switch
+              value={voiceOn}
+              onValueChange={async (v) => { setVoiceOn(v); await setNarrate(v); }}
+              trackColor={{ false: '#222', true: theme.colors.glowNeon }}
+              thumbColor={voiceOn ? theme.colors.neon : '#666'}
+              testID="toggle-voice"
+            />
+          </View>
+          {VOICE_OPTIONS.map((v) => (
+            <Pressable
+              key={v.id}
+              onPress={() => pickVoice(v.id)}
+              style={[styles.voiceRow, voice === v.id && styles.voiceRowSel]}
+              testID={`voice-${v.id}`}
+            >
+              <View style={[styles.radio, voice === v.id && styles.radioSel]}>
+                {voice === v.id && <View style={styles.radioDot} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.voiceLabel, voice === v.id && { color: theme.colors.neon }]}>
+                  {v.label}
+                </Text>
+                <Text style={styles.voiceDesc}>{v.desc}</Text>
+              </View>
+              <Pressable
+                onPress={() => playSample(v.id)}
+                style={styles.previewBtn}
+                testID={`preview-${v.id}`}
+              >
+                {testing === v.id
+                  ? <ActivityIndicator size="small" color={theme.colors.neon} />
+                  : <Ionicons name="play-circle-outline" size={22} color={theme.colors.neon} />
+                }
+              </Pressable>
+            </Pressable>
+          ))}
         </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>DISPLAY</Text>
-          <Row label="Motion & Animations" hint="Pulse, sparklines, orbs" value={animOn} onChange={setAnimOn} testID="toggle-anim" />
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Motion & Animations</Text>
+              <Text style={styles.rowHint}>Pulse, sparklines, orbs</Text>
+            </View>
+            <Switch
+              value={animOn} onValueChange={setAnimOn}
+              trackColor={{ false: '#222', true: theme.colors.glowNeon }}
+              thumbColor={animOn ? theme.colors.neon : '#666'}
+              testID="toggle-anim"
+            />
+          </View>
         </View>
 
-        <Pressable style={styles.card} onPress={() => router.push('/stocks')} testID="manage-watchlist">
+        <Pressable style={styles.card} onPress={() => router.push('/stocks/browse' as any)} testID="manage-watchlist">
           <View style={styles.linkRow}>
             <View>
               <Text style={styles.sectionLabel}>WATCHLIST</Text>
-              <Text style={styles.linkHint}>Add or remove tracked tickers</Text>
+              <Text style={styles.linkHint}>Browse 30K+ stocks & track favorites</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
           </View>
@@ -85,31 +155,13 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>ABOUT</Text>
           <Text style={styles.aboutText}>
-            Project Inception · v1.0{'\n'}
+            Project Inception · v1.1{'\n'}
             Civilian AI assistant for markets, intelligence, and documents.{'\n'}
             Powered by JARVIS (Claude Sonnet 4.5).
           </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Row({ label, hint, value, onChange, testID }: {
-  label: string; hint: string; value: boolean; onChange: (v: boolean) => void; testID: string;
-}) {
-  return (
-    <View style={styles.row} testID={testID}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowHint}>{hint}</Text>
-      </View>
-      <Switch
-        value={value} onValueChange={onChange}
-        trackColor={{ false: '#222', true: theme.colors.glowNeon }}
-        thumbColor={value ? theme.colors.neon : '#666'}
-      />
-    </View>
   );
 }
 
@@ -133,12 +185,21 @@ const styles = StyleSheet.create({
   },
   rowLabel: { color: theme.colors.text, fontFamily: theme.fonts.bodyBold, fontSize: 14 },
   rowHint: { color: theme.colors.textTertiary, fontFamily: theme.fonts.body, fontSize: 11, marginTop: 2 },
-  testBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    marginTop: 12, paddingVertical: 10,
-    borderRadius: theme.radius.md, borderWidth: 1, borderColor: 'rgba(212,255,0,0.35)',
+  voiceRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.borderSubtle,
   },
-  testText: { color: theme.colors.neon, fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
+  voiceRowSel: {},
+  radio: {
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 1, borderColor: theme.colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  radioSel: { borderColor: theme.colors.neon },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.neon },
+  voiceLabel: { color: theme.colors.text, fontFamily: theme.fonts.bodyBold, fontSize: 13, letterSpacing: 1.5 },
+  voiceDesc: { color: theme.colors.textTertiary, fontFamily: theme.fonts.body, fontSize: 10, marginTop: 2 },
+  previewBtn: { padding: 6 },
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   linkHint: { color: theme.colors.textTertiary, fontFamily: theme.fonts.body, fontSize: 12, marginTop: 4 },
   aboutText: { color: theme.colors.textSecondary, fontFamily: theme.fonts.body, fontSize: 12, lineHeight: 20 },

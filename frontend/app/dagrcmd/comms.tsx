@@ -114,10 +114,38 @@ export default function CommsScreen() {
         <Pressable onPress={() => router.replace('/dagrcmd')} testID="comms-back" style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={T.colors.textPrimary} />
         </Pressable>
-        <View style={styles.headerCenter}>
+        <Pressable
+          onLongPress={() => {
+            Alert.prompt
+              ? Alert.prompt('Rename callsign', `Current: ${me.callsign}\nEnter new callsign:`,
+                  async (newName) => {
+                    if (!newName || !newName.trim()) return;
+                    const newCs = newName.trim().toUpperCase();
+                    try {
+                      const r = await fetch(`${API}/dagrcmd/officers/rename`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          old_callsign: me.callsign,
+                          auth_code: me.authCode,
+                          new_callsign: newCs,
+                        }),
+                      });
+                      if (!r.ok) throw new Error(await r.text());
+                      const { storeCredentials } = await import('../../lib/crypto');
+                      await storeCredentials(newCs, me.authCode);
+                      setMe({ callsign: newCs, authCode: me.authCode });
+                      load(newCs);
+                      Alert.alert('Renamed', `You are now ${newCs}`);
+                    } catch (e: any) { Alert.alert('Rename failed', String(e?.message || e)); }
+                  })
+              : Alert.alert('Rename', 'Long-press supported on iOS only. Use Settings on Android.');
+          }}
+          style={styles.headerCenter}
+          testID="callsign-tap"
+        >
           <Text style={styles.brand}>COMMS</Text>
-          <Text style={styles.callsign}>{me.callsign} · {pub.slice(0, 10)}…</Text>
-        </View>
+          <Text style={styles.callsign}>{me.callsign} · long-press to rename</Text>
+        </Pressable>
         <Pressable onPress={logout} testID="comms-logout" style={styles.iconBtn}>
           <Ionicons name="log-out-outline" size={20} color={T.colors.textMuted} />
         </Pressable>
@@ -136,6 +164,10 @@ export default function CommsScreen() {
         <Pressable onPress={() => setShowJoin(true)} style={styles.actBtn} testID="join-channel-btn">
           <Ionicons name="enter-outline" size={16} color={T.colors.red} />
           <Text style={styles.actText}>JOIN BY CODE</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/dagrcmd/map' as any)} style={styles.actBtn} testID="open-map-btn">
+          <Ionicons name="map-outline" size={16} color={T.colors.red} />
+          <Text style={styles.actText}>TAC MAP</Text>
         </Pressable>
       </View>
 

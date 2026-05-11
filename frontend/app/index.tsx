@@ -21,6 +21,7 @@ import JarvisOrb from '../components/JarvisOrb';
 import StockTickerCard, { Quote } from '../components/StockTickerCard';
 
 const DEFAULT_SYMBOLS = ['AAPL', 'TSLA', 'NVDA'];
+const USER_ID = 'local-user';
 
 const ACTIONS = [
   { key: 'document', label1: 'CREATE', label2: 'DOCUMENT', icon: 'document-text-outline' as const, color: theme.colors.green, glow: theme.colors.glowGreen, route: '/document' },
@@ -38,10 +39,13 @@ export default function Home() {
 
   const fetchQuotes = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/stocks/quotes?symbols=${DEFAULT_SYMBOLS.join(',')}`);
+      // Load user watchlist first
+      const wRes = await fetch(`${API}/watchlist/${USER_ID}`);
+      const wJson = await wRes.json();
+      const syms = (wJson.symbols && wJson.symbols.length ? wJson.symbols : DEFAULT_SYMBOLS).slice(0, 8);
+      const r = await fetch(`${API}/stocks/quotes?symbols=${syms.join(',')}`);
       const j = await r.json();
       setQuotes(j.quotes || []);
-      // build dynamic greeting
       const avg = (j.quotes || []).reduce((s: number, q: Quote) => s + q.change_pct, 0) / Math.max(1, (j.quotes || []).length);
       const dir = avg >= 0 ? 'up' : 'down';
       const hour = new Date().getHours();
@@ -97,18 +101,35 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Stock Tickers */}
-        <View style={styles.tickerRow}>
+        {/* Stock Tickers - horizontal scroll */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 4, gap: 4 }}
+          style={{ marginTop: 4 }}
+        >
           {loading ? (
             <View style={styles.loaderBox}>
               <ActivityIndicator color={theme.colors.neon} />
             </View>
           ) : (
-            quotes.map((q) => (
-              <StockTickerCard key={q.symbol} quote={q} onPress={() => router.push(`/stock/${q.symbol}` as any)} />
-            ))
+            <>
+              {quotes.map((q) => (
+                <View key={q.symbol} style={{ width: 130 }}>
+                  <StockTickerCard quote={q} onPress={() => router.push(`/stock/${q.symbol}` as any)} />
+                </View>
+              ))}
+              <Pressable
+                onPress={() => router.push('/stocks/browse' as any)}
+                style={styles.browseTile}
+                testID="browse-tile"
+              >
+                <Ionicons name="search" size={22} color={theme.colors.neon} />
+                <Text style={styles.browseTileText}>BROWSE{'\n'}30K+ STOCKS</Text>
+              </Pressable>
+            </>
           )}
-        </View>
+        </ScrollView>
 
         {/* JARVIS Greeting */}
         <Pressable onPress={speakGreeting} style={styles.jarvisSection} testID="jarvis-greeting">
@@ -199,7 +220,14 @@ const styles = StyleSheet.create({
   },
   dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   tickerRow: { flexDirection: 'row', marginHorizontal: -4, marginTop: 4 },
-  loaderBox: { flex: 1, height: 84, alignItems: 'center', justifyContent: 'center' },
+  loaderBox: { flex: 1, height: 84, alignItems: 'center', justifyContent: 'center', minWidth: 200 },
+  browseTile: {
+    width: 130, height: 84, marginHorizontal: 4,
+    backgroundColor: 'rgba(212,255,0,0.05)', borderWidth: 1,
+    borderColor: 'rgba(212,255,0,0.4)', borderStyle: 'dashed',
+    borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center', gap: 4,
+  },
+  browseTileText: { color: theme.colors.neon, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, textAlign: 'center' },
   jarvisSection: {
     marginTop: 32,
     flexDirection: 'row',

@@ -252,6 +252,57 @@ async def _live_candles(sym: str, resolution: str = "60", days: int = 1) -> Opti
         return None
 
 
+@api.get("/stocks/catalog")
+async def stocks_catalog(search: str = "", exchange: str = "US", limit: int = 200):
+    """Browse all stocks from Finnhub by exchange, filterable by search query."""
+    if not FINNHUB_KEY:
+        raise HTTPException(503, "Finnhub key not configured")
+    cache_key = f"catalog:{exchange}"
+    now = datetime.now(timezone.utc).timestamp()
+    cached = _av_cache.get(cache_key)
+    if not cached or (now - cached["t"]) > 86400:  # 24h cache
+        try:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as c:
+                r = await c.get("https://finnhub.io/api/v1/stock/symbol",
+                                params={"exchange": exchange, "token": FINNHUB_KEY})
+                r.raise_for_status()
+                all_stocks = r.json() or []
+            _av_cache[cache_key] = {"t": now, "data": all_stocks}
+        except Exception as e:
+            logger.warning(f"catalog fail: {e}")
+            raise HTTPException(502, f"Catalog fetch failed: {e}")
+    else:
+        all_stocks = cached["data"]
+
+    q = (search or "").strip().lower()
+    if q:
+        # match symbol startswith first, then description contains
+        starts = []
+        contains = []
+        for s in all_stocks:
+            sym = (s.get("symbol") or "").upper()
+            desc = (s.get("description") or "").lower()
+            if sym.lower().startswith(q):
+                starts.append(s)
+            elif q in desc:
+                contains.append(s)
+            if len(starts) + len(contains) >= limit * 3:
+                break
+        filtered = starts + contains
+    else:
+        filtered = all_stocks
+
+    items = []
+    for s in filtered[:limit]:
+        items.append({
+            "symbol": s.get("symbol") or s.get("displaySymbol"),
+            "name": s.get("description") or "",
+            "type": s.get("type") or "",
+            "currency": s.get("currency") or "USD",
+        })
+    return {"exchange": exchange, "total": len(all_stocks), "shown": len(items), "items": items}
+
+
 @api.get("/stocks/quotes")
 async def get_quotes(symbols: str = ",".join(DEFAULT_WATCHLIST)):
     """Returns batch quotes with sparkline. symbols=AAPL,TSLA,..."""
@@ -990,6 +1041,44 @@ async def list_officers(callsigns: Optional[str] = None):
         q = {"callsign": {"$in": wanted}}
     docs = await db.dagr_officers.find(q, {"_id": 0, "auth_hash": 0}).to_list(500)
     return {"officers": docs}
+
+
+class OfficerRename(BaseModel):
+    old_callsign: str
+    auth_code: str
+    new_callsign: str
+
+
+@api.post("/dagrcmd/officers/rename")
+async def rename_officer(r: OfficerRename):
+    old = r.old_callsign.strip().upper()
+    new = r.new_callsign.strip().upper()
+    if not new:
+        raise HTTPException(400, "New callsign required")
+    if old == new:
+        return {"callsign": new, "renamed": False}
+    doc = await db.dagr_officers.find_one({"callsign": old})
+    if not doc or doc.get("auth_hash") != _hash_code(old, r.auth_code):
+        raise HTTPException(401, "Auth failed")
+    exists = await db.dagr_officers.find_one({"callsign": new})
+    if exists:
+        raise HTTPException(409, "Callsign already taken")
+    # Update officer (re-hash auth with new callsign as salt)
+    new_hash = _hash_code(new, r.auth_code)
+    await db.dagr_officers.update_one(
+        {"callsign": old},
+        {"$set": {"callsign": new, "auth_hash": new_hash}}
+    )
+    # Update channels (owner & members)
+    await db.dagr_channels.update_many({"owner": old}, {"$set": {"owner": new}})
+    await db.dagr_channels.update_many(
+        {"members": old},
+        {"$set": {"members.$": new}}
+    )
+    # Update message senders (server only sees ciphertext keyed by callsign — rekey not needed
+    # for past messages since the user's private key is unchanged; we just rename refs)
+    await db.dagr_messages.update_many({"sender": old}, {"$set": {"sender": new}})
+    return {"callsign": new, "renamed": True}
 
 
 class ChannelCreate(BaseModel):
