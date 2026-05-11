@@ -1,0 +1,178 @@
+{
+  "theme": "dark",
+  "archetype": "Electric & Neon",
+  "design_philosophy": "Minimalist sci-fi/Iron-Man inspired interface for 'Project Inception'. True black backgrounds, soft glowing neon outlines, crisp thin typography, and generous spacing. High contrast for accessibility. Pure structural hierarchy avoiding decorative slop.",
+  "colors": {
+    "background": {
+      "primary": "#000000",
+      "surface": "#0A0A0A",
+      "surfaceElevated": "#141414"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "tertiary": "#71717A",
+      "neonGreeting": "#D4FF00"
+    },
+    "accents": {
+      "primaryNeon": "#D4FF00",
+      "green": "#00FF66",
+      "blue": "#00E5FF",
+      "purple": "#B026FF",
+      "danger": "#FF3366"
+    },
+    "borders": {
+      "subtle": "#27272A",
+      "glowPrimary": "rgba(212, 255, 0, 0.3)",
+      "glowGreen": "rgba(0, 255, 102, 0.3)",
+      "glowBlue": "rgba(0, 229, 255, 0.3)",
+      "glowPurple": "rgba(176, 38, 255, 0.3)"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Rajdhani",
+      "body": "SpaceGrotesk",
+      "mono": "JetBrainsMono"
+    },
+    "scale": {
+      "h1": { "fontSize": 36, "lineHeight": 40, "letterSpacing": -0.5 },
+      "h2": { "fontSize": 28, "lineHeight": 34, "letterSpacing": -0.3 },
+      "h3": { "fontSize": 24, "lineHeight": 30, "letterSpacing": 0 },
+      "body": { "fontSize": 16, "lineHeight": 24, "letterSpacing": 0 },
+      "label": { "fontSize": 14, "lineHeight": 20, "letterSpacing": 1.5, "textTransform": "uppercase" },
+      "caption": { "fontSize": 12, "lineHeight": 16, "letterSpacing": 0.5 }
+    }
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "xl": 32,
+    "xxl": 48
+  },
+  "shadows": {
+    "neonGlowPrimary": { "shadowColor": "#D4FF00", "shadowOffset": { "width": 0, "height": 0 }, "shadowOpacity": 0.4, "shadowRadius": 10, "elevation": 5 },
+    "neonGlowGreen": { "shadowColor": "#00FF66", "shadowOffset": { "width": 0, "height": 0 }, "shadowOpacity": 0.4, "shadowRadius": 10, "elevation": 5 },
+    "neonGlowBlue": { "shadowColor": "#00E5FF", "shadowOffset": { "width": 0, "height": 0 }, "shadowOpacity": 0.4, "shadowRadius": 10, "elevation": 5 }
+  },
+  "components": {
+    "header": {
+      "layout": "Row, space-between, items-center. Top margin respecting safe area.",
+      "logo": "Text 'PROJECT INCEPTION' in Rajdhani, uppercase, tracking-widest (letterSpacing: 3). Icon: Ionicons 'globe-outline' thin neon ring to the left.",
+      "live_indicator": "Small dot (green accent) with text 'LIVE' in mono text-xs top-right."
+    },
+    "stock_ticker_card": {
+      "layout": "Horizontal row of 3 cards. Flex: 1 for each, space between.",
+      "style": "Background #0A0A0A, border 1px solid #27272A, borderRadius 8px, padding 8px.",
+      "content": "Ticker symbol (AAPL), percentage change (+2.3% in green or -1.1% in red), tiny SVG sparkline using react-native-svg.",
+      "test_id": "stock-ticker-card"
+    },
+    "jarvis_avatar": {
+      "layout": "Circular orbital style.",
+      "size": 100,
+      "visual": "Multiple concentric circles using react-native-svg. Reanimated for continuous slow rotation and pulse. Inner glow using expo-linear-gradient radially or overlapping SVG shapes with opacity.",
+      "position": "Center left",
+      "test_id": "jarvis-avatar-orb"
+    },
+    "speech_bubble": {
+      "layout": "Rounded rectangle with a small SVG tail pointing left towards JARVIS.",
+      "style": "Background #141414, border 1px solid rgba(212, 255, 0, 0.3), borderRadius 16px, padding 16px.",
+      "text": "Neon green-yellow type (#D4FF00), Space Grotesk font.",
+      "position": "Center right, flex: 1, next to JARVIS avatar",
+      "test_id": "jarvis-speech-bubble"
+    },
+    "action_card": {
+      "layout": "Column, items-center, justify-center.",
+      "style": "Background #000000, border 1px solid #27272A, borderRadius 16px, padding 16px. Flex: 1.",
+      "glow": "Subtle inner glow on icon via SVG filters or layered absolute positioned gradients.",
+      "variants": {
+        "document": { "icon": "document-text-outline", "iconColor": "#00FF66", "borderColor": "rgba(0, 255, 102, 0.4)" },
+        "stock": { "icon": "bar-chart-outline", "iconColor": "#00E5FF", "borderColor": "rgba(0, 229, 255, 0.4)" },
+        "jarvis": { "icon": "chatbubbles-outline", "iconColor": "#B026FF", "borderColor": "rgba(176, 38, 255, 0.4)" }
+      },
+      "test_id": "action-card-button"
+    },
+    "bottom_nav": {
+      "layout": "Floating action bar or thumb-friendly bottom nav.",
+      "style": "Background rgba(10, 10, 10, 0.85), borderTop 1px solid #27272A.",
+      "blur": "Use expo-blur (BlurView, tint='dark') if available, else solid dark."
+    }
+  },
+  "screens": {
+    "splash_onboarding": {
+      "structure": [
+        "Full screen pure black background.",
+        "Center: Animated JARVIS orb (scaling up, glowing).",
+        "Text: 'PROJECT INCEPTION' fading in below.",
+        "Status: 'Initializing secure connection...' in mono font."
+      ]
+    },
+    "home_dashboard": {
+      "structure": [
+        "Header: Logo + Globe Icon + Live Indicator",
+        "Top Row: 3 Stock Ticker Cards (AAPL, TSLA, NVDA)",
+        "Center Section: JARVIS Avatar + Speech Bubble ('Good morning Architect...')",
+        "Bottom Row: 3 Action Cards (Create Document, Stock Tracker, Talk to Jarvis)",
+        "Bottom: iOS home indicator safe area inset"
+      ]
+    },
+    "jarvis_chat": {
+      "structure": [
+        "Header: Back button, JARVIS status (Online - Green Dot)",
+        "Scrollable area: Chat history (User messages right, JARVIS messages left with small orbital icon)",
+        "Footer: Voice input button (Hold-to-speak in center, pulsing glow), text input field, send button"
+      ]
+    },
+    "document_generator": {
+      "structure": [
+        "Header: 'Create Document' + Back button",
+        "Form: Multiline prompt input area (border glowing on focus)",
+        "Options: Segmented control/Toggle for PDF vs PowerPoint",
+        "Action: 'Generate Document' button with neon primary background or outline glow"
+      ]
+    },
+    "stock_tracker": {
+      "structure": [
+        "Header: 'Market Overview' + Back button",
+        "Tabs: Hourly, Quarterly views (using neon accent underline for active tab)",
+        "List: Watchlist stocks with expanded sparklines, current price, and AI buy/sell recommendations in accent colors",
+        "Detail View (Modal/Push): Full interactive chart, major world news feed mapped to tracked stock"
+      ]
+    },
+    "document_library": {
+      "structure": [
+        "Header: 'Library' + Back button",
+        "List: Generated PDFs/PPTs cards with document icon, title, timestamp",
+        "Actions per card: Share, Delete, Open (using standard vector icons)"
+      ]
+    },
+    "settings_accessibility": {
+      "structure": [
+        "Header: 'Settings' + Back button",
+        "Section: Accessibility (Voice Narration Toggle for Blind users, Screen Reader Mode)",
+        "Section: Watchlist Management (Add/Remove tickers)",
+        "Section: Display/Theme (Keep Dark Sci-Fi locked, but maybe toggle animations)"
+      ]
+    }
+  },
+  "animations": {
+    "jarvisOrb": "Use react-native-reanimated for withRepeat and withTiming to continuously rotate outer SVG rings and pulse scale.",
+    "sparklines": "Draw-in path animation using react-native-reanimated on mount.",
+    "buttons": "Slight scale down on press (withSpring) for tactile feedback."
+  },
+  "accessibility": {
+    "contrast": "Ensure >= 4.5:1 ratio against pure black background.",
+    "touchTargets": "Minimum 48x48px for all interactive elements.",
+    "voiceNarration": "Explicit support for blind users via TTS toggle. Use accessible={true}, accessibilityLabel, and accessibilityRole props on all elements.",
+    "testIds": "All interactive elements MUST include data-testid attribute for automated testing."
+  },
+  "libraries_and_tools": {
+    "icons": "@expo/vector-icons (Ionicons preferred for sci-fi feel)",
+    "svg": "react-native-svg for shapes, sparklines, JARVIS orb",
+    "gradients": "expo-linear-gradient for subtle glowing accents only",
+    "animations": "react-native-reanimated"
+  },
+  "instructions_to_main_agent": "Implement strict React Native Expo components following this design guide. Focus heavily on layout precision, spacing, and glowing sci-fi aesthetics using SVG and reanimated. Do NOT use web HTML/CSS. Use StyleSheet.create for styling. Ensure all elements have data-testid attributes."
+}
