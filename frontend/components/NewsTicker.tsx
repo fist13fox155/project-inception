@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   bar: {
     position: 'relative',
     width: '100%',
-    backgroundColor: 'rgba(0,15,30,0.92)',
+    backgroundColor: 'rgba(0,15,30,0.95)',
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderTopColor: 'rgba(0,229,255,0.5)',
@@ -136,9 +136,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 4,
     overflow: 'hidden',
-    // Span the full width by negating parent's horizontal padding (16)
+    // Bleed past parent's 16-px horizontal padding so the banner spans
+    // edge-to-edge like a real Wall Street stock ticker.
     marginHorizontal: -16,
-    paddingLeft: 60,
+    paddingLeft: 56,
   },
   live: {
     position: 'absolute',

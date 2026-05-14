@@ -47,7 +47,7 @@ export default function CommsScreen() {
       const r = await fetch(`${API}/dagrcmd/channels/${callsign}`);
       const j = await r.json();
       setChannels(j.channels || []);
-    } catch (e) { console.warn(e); }
+    } catch (e) { void (e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 

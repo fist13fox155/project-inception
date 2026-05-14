@@ -31,7 +31,7 @@ export default function StocksBrowse() {
       const j = await r.json();
       setItems(j.items || []);
       setTotal(j.total || 0);
-    } catch (e) { console.warn('catalog', e); }
+    } catch (e) { void ('catalog', e); }
     finally { setSearching(false); setLoading(false); }
   }, []);
 

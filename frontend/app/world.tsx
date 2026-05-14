@@ -54,7 +54,7 @@ export default function WorldScreen() {
       const j2 = await r2.json();
       setItems(j1.items || []);
       setHotspots(j2.hotspots || []);
-    } catch (e) { console.warn('world', e); }
+    } catch (e) { void ('world', e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 

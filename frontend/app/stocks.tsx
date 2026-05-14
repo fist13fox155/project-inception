@@ -38,7 +38,7 @@ export default function StocksScreen() {
           Alert.alert('Invalid tickers removed', `${j.invalid.join(', ')} not recognized.`);
         }
       }
-    } catch (e) { console.warn('quotes', e); }
+    } catch (e) { void ('quotes', e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 

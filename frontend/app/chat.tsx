@@ -109,7 +109,7 @@ export default function ChatScreen() {
         if (s.didJustFinish) { setSpeakingId(null); sound.unloadAsync().catch(() => {}); }
       });
     } catch (e) {
-      console.warn('TTS playback failed', e);
+      void ('TTS playback failed', e);
       setSpeakingId(null);
       Speech.speak(m.content, { rate: 0.93, pitch: 0.95, language: 'en-GB', onDone: () => setSpeakingId(null) });
     }
@@ -124,7 +124,7 @@ export default function ChatScreen() {
       await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await rec.startAsync();
       setRecording(rec);
-    } catch (e) { console.warn('rec start', e); }
+    } catch (e) { void ('rec start', e); }
   };
 
   const stopRecording = async () => {
@@ -142,7 +142,7 @@ export default function ChatScreen() {
       const j = await r.json();
       setSending(false);
       if (j.text) send(j.text);
-    } catch (e) { setSending(false); console.warn('stt', e); }
+    } catch (e) { setSending(false); void ('stt', e); }
   };
 
   return (

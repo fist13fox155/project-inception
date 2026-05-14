@@ -63,9 +63,10 @@ export default function DagrHome() {
       const stashed = fromUrl || (await readInvite());
       if (stashed) setPendingInvite(stashed);
 
-      const { callsign: cs, authCode: ac } = await getCredentials();
-      if (cs && ac) {
-        setCallsign(cs); setAuthCode(ac); setRestored(true);
+      // Restore callsign for convenience, but REQUIRE auth-code entry every time.
+      const { callsign: cs } = await getCredentials();
+      if (cs) {
+        setCallsign(cs);
         setMode('login');
       }
     })();

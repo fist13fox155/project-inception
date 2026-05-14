@@ -47,7 +47,7 @@ export default function StockDetail() {
         body: JSON.stringify({ symbol: sym }),
       });
       setRec(await r.json());
-    } catch (e) { console.warn(e); }
+    } catch (e) { void (e); }
     finally { setRecLoading(false); }
   };
 

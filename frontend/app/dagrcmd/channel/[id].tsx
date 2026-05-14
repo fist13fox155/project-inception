@@ -179,7 +179,7 @@ export default function ChannelScreen() {
       await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
       await rec.startAsync();
       setRecording(rec);
-    } catch (e) { console.warn(e); }
+    } catch (e) { void (e); }
   };
 
   const stopRecording = async () => {
@@ -194,7 +194,7 @@ export default function ChannelScreen() {
       const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
       const durMs = (status as any)?.durationMillis || 0;
       await send('audio', b64, { audio_ms: durMs });
-    } catch (e) { console.warn(e); }
+    } catch (e) { void (e); }
   };
 
   const playAudio = async (m: DecodedMsg) => {
@@ -218,7 +218,7 @@ export default function ChannelScreen() {
         if (s.error) { setPlayingId(null); }
       });
     } catch (e) {
-      console.warn('audio play failed', e);
+      void ('audio play failed', e);
       setPlayingId(null);
       Alert.alert('Playback failed', 'Could not play this transmission.');
     }
@@ -231,7 +231,7 @@ export default function ChannelScreen() {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) { Alert.alert('Permission needed', 'Photo library access required.'); return; }
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 0.5,
         base64: true,
       });
@@ -248,7 +248,7 @@ export default function ChannelScreen() {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) { Alert.alert('Permission needed', 'Library access required.'); return; }
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ['videos'],
         quality: 0.5,
         videoMaxDuration: 15,
       });
@@ -300,7 +300,7 @@ export default function ChannelScreen() {
           await send('live', b64, { audio_ms: status?.durationMillis || 2500 });
         } catch {}
       }
-    } catch (e) { console.warn('live loop', e); }
+    } catch (e) { void ('live loop', e); }
     if (liveActiveRef.current) setTimeout(liveLoop, 50);
   }, []);
 
@@ -330,7 +330,7 @@ export default function ChannelScreen() {
         sound.setOnPlaybackStatusUpdate((s: any) => {
           if (s.didJustFinish || s.error) sound.unloadAsync().catch(() => {});
         });
-      } catch (e) { console.warn('live playback', e); }
+      } catch (e) { void ('live playback', e); }
     })();
   }, [messages, me?.callsign]);
 

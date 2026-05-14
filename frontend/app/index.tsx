@@ -28,6 +28,7 @@ import StockTickerCard, { Quote } from '../components/StockTickerCard';
 import EtherealOrbBackground from '../components/EtherealOrbBackground';
 import NewsTicker from '../components/NewsTicker';
 import CommoditiesStrip from '../components/CommoditiesStrip';
+import SkeletonStockGrid from '../components/SkeletonStockGrid';
 import {
   isAuthenticated, getArchitectName, clearInceptionAuth, setSession, getVoice,
 } from '../lib/prefs';
@@ -51,6 +52,7 @@ export default function Home() {
   const [greeting, setGreeting] = useState('Standing by.');
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [feedError, setFeedError] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
 
   // AUTH GATE
@@ -68,6 +70,7 @@ export default function Home() {
   }, []);
 
   const fetchQuotes = useCallback(async () => {
+    setFeedError(false);
     try {
       const wRes = await fetch(`${API}/watchlist/${USER_ID}`);
       const wJson = await wRes.json();
@@ -114,9 +117,9 @@ export default function Home() {
       setGreeting(
         `Good ${tod} ${architect}.\nMarkets are ${dir} ${Math.abs(avg).toFixed(1)} percent today.${brief}`
       );
-    } catch (e) {
-      console.warn('fetch quotes', e);
-      setGreeting(`Standing by, ${architect}. Markets feed momentarily offline.`);
+    } catch {
+      setFeedError(true);
+      setGreeting(`Standing by, ${architect}. Live data feed unavailable.`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -165,10 +168,10 @@ export default function Home() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <Icon name="globe-outline" size={22} color={theme.colors.blue} />
-            <Text style={styles.logoText}>PROJECT INCEPTION</Text>
+            <Icon name="globe-outline" size={18} color={theme.colors.blue} />
+            <Text style={styles.logoText} numberOfLines={1}>INCEPTION</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={styles.headerActions}>
             <Pressable
               onPress={() => router.push('/dagrcmd')}
               testID="open-dagrcmd"
@@ -178,7 +181,7 @@ export default function Home() {
               <Text style={styles.dagrText}>DAGRCMD</Text>
             </Pressable>
             <Pressable onPress={logout} testID="logout" style={styles.logoutBtn}>
-              <Icon name="log-out-outline" size={12} color={theme.colors.blue} />
+              <Icon name="log-out-outline" size={11} color={theme.colors.blue} />
               <Text style={styles.logoutText}>LOGOUT</Text>
             </Pressable>
           </View>
@@ -187,10 +190,14 @@ export default function Home() {
         {/* News + Stocks ticker */}
         <NewsTicker quotes={quotes} />
 
-        {/* Stock Tickers - 3x3 grid */}
+        {/* Stock Tickers - 3x3 grid with skeleton/graceful degradation */}
         {loading ? (
-          <View style={styles.loaderBox}>
-            <ActivityIndicator color={theme.colors.blue} />
+          <SkeletonStockGrid count={6} />
+        ) : feedError && !quotes.length ? (
+          <View style={styles.degradedBox} testID="stocks-degraded">
+            <Icon name="alert-circle" size={18} color={theme.colors.amber} />
+            <Text style={styles.degradedText}>LIVE DATA UNAVAILABLE</Text>
+            <Text style={styles.degradedHint}>Pull to refresh</Text>
           </View>
         ) : (
           <View style={styles.tickerGrid}>
@@ -256,8 +263,8 @@ export default function Home() {
               <View style={[styles.iconBubble, { borderColor: a.color, shadowColor: a.color }]}>
                 <Icon name={a.icon} size={26} color={a.color} />
               </View>
-              <Text style={styles.actionLabel1}>{a.label1}</Text>
-              <Text style={styles.actionLabel2}>{a.label2}</Text>
+              <Text style={styles.actionLabel1} numberOfLines={1}>{a.label1}</Text>
+              <Text style={styles.actionLabel2} numberOfLines={1}>{a.label2}</Text>
             </Pressable>
           ))}
         </View>
@@ -307,21 +314,29 @@ const styles = StyleSheet.create({
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.blue },
   liveText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   dagrBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 8, paddingVertical: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 7, paddingVertical: 4,
     borderRadius: theme.radius.full,
     backgroundColor: 'rgba(255,51,51,0.06)',
     borderWidth: 1, borderColor: 'rgba(255,51,51,0.35)',
   },
-  dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
+  dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 9, letterSpacing: 1.2 },
   logoutBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 7, paddingVertical: 4,
     borderRadius: theme.radius.full,
     backgroundColor: 'rgba(0,229,255,0.08)',
     borderWidth: 1, borderColor: 'rgba(0,229,255,0.35)',
   },
-  logoutText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
+  logoutText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 9, letterSpacing: 1.2 },
+  degradedBox: {
+    marginTop: 16, padding: 18, borderRadius: theme.radius.md,
+    backgroundColor: 'rgba(255,196,0,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,196,0,0.35)',
+    alignItems: 'center', gap: 6,
+  },
+  degradedText: { color: theme.colors.amber, fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
+  degradedHint: { color: theme.colors.textTertiary, fontFamily: theme.fonts.body, fontSize: 11 },
   iconBtnSmall: { padding: 4 },
   tickerGrid: {
     flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, marginHorizontal: -4,
@@ -381,14 +396,14 @@ const styles = StyleSheet.create({
   },
   bubbleActions: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   bubbleHint: { color: theme.colors.textTertiary, fontSize: 9, letterSpacing: 1.5, fontFamily: theme.fonts.bodyBold },
-  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 24 },
+  actionsRow: { flexDirection: 'row', gap: 8, marginTop: 24 },
   actionCard: {
     flex: 1,
     backgroundColor: 'rgba(0,8,20,0.55)',
     borderWidth: 1,
     borderRadius: theme.radius.lg,
-    paddingVertical: 18,
-    paddingHorizontal: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 6,
     alignItems: 'center',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.25,
@@ -396,17 +411,17 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   iconBubble: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 48, height: 48, borderRadius: 24,
     borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
     backgroundColor: 'rgba(255,255,255,0.02)',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
   },
-  actionLabel1: { color: theme.colors.text, fontFamily: theme.fonts.heading, fontSize: 12, letterSpacing: 2 },
-  actionLabel2: { color: theme.colors.text, fontFamily: theme.fonts.heading, fontSize: 12, letterSpacing: 2 },
+  actionLabel1: { color: theme.colors.text, fontFamily: theme.fonts.heading, fontSize: 10, letterSpacing: 1.5, textAlign: 'center' },
+  actionLabel2: { color: theme.colors.text, fontFamily: theme.fonts.heading, fontSize: 10, letterSpacing: 1.5, textAlign: 'center' },
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',

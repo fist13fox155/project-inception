@@ -25,7 +25,7 @@ nacl.setPRNG((x: Uint8Array, n: number) => {
   } catch (e) {
     // Last-resort weak fallback so the app doesn't hard-crash on enlist
     // (no real security, but keeps the flow working for testing).
-    console.warn('[crypto] secure PRNG unavailable; falling back to Math.random', e);
+    void ('[crypto] secure PRNG unavailable; falling back to Math.random', e);
     for (let i = 0; i < n; i++) x[i] = Math.floor(Math.random() * 256);
   }
 });

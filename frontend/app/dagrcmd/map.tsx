@@ -143,7 +143,7 @@ export default function DagrMapScreen() {
               };
             }
           }
-        } catch (e) { console.warn('msg', e); }
+        } catch (e) { void ('msg', e); }
       }
 
       // Add my own current location if we have permission
@@ -165,7 +165,7 @@ export default function DagrMapScreen() {
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setPings(list);
       if (ready) sendPings(list);
-    } catch (e) { console.warn(e); }
+    } catch (e) { void (e); }
     finally { setLoading(false); }
   }, [ready, sendPings, router]);
 

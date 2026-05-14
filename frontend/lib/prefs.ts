@@ -1,5 +1,7 @@
 /**
  * App-wide preferences persisted in SecureStore (native) or localStorage (web).
+ * NOTE: session is NOT persisted across app restarts — PIN is required every
+ * time you open Project Inception or DAGRCMD, by design.
  */
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
@@ -10,7 +12,8 @@ const KEY_VOICE = 'pref_voice';
 const KEY_NARRATE = 'pref_narrate';
 const KEY_ARCHITECT = 'pref_architect_name';
 const KEY_PIN = 'pref_inception_pin';
-const KEY_SESSION = 'pref_session_active';
+// Session lives ONLY in-memory for this run. Resets every app launch / reload.
+let sessionActive = false;
 
 async function get(key: string): Promise<string | null> {
   if (Platform.OS === 'web') {
@@ -50,14 +53,14 @@ export async function isAuthenticated(): Promise<boolean> {
   const name = await getArchitectName();
   const pin = await getPin();
   if (!name || !pin) return false;
-  return (await get(KEY_SESSION)) === '1';
+  return sessionActive;
 }
-export async function setSession(active: boolean) { await set(KEY_SESSION, active ? '1' : '0'); }
+export async function setSession(active: boolean) { sessionActive = active; }
 
 export async function clearInceptionAuth() {
   await remove(KEY_ARCHITECT);
   await remove(KEY_PIN);
-  await remove(KEY_SESSION);
+  sessionActive = false;
 }
 
 export const VOICE_OPTIONS: { id: VoiceId; label: string; desc: string }[] = [
