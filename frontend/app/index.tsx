@@ -143,7 +143,13 @@ export default function Home() {
     }
   }, [architect]);
 
-  useEffect(() => { if (authChecked) fetchQuotes(); }, [authChecked, fetchQuotes]);
+  useEffect(() => {
+    if (!authChecked) return;
+    fetchQuotes();
+    // Auto-refresh stocks every 45 seconds — no need to pull down
+    const id = setInterval(() => fetchQuotes(), 45_000);
+    return () => clearInterval(id);
+  }, [authChecked, fetchQuotes]);
 
   const onRefresh = () => { setRefreshing(true); fetchQuotes(); };
 

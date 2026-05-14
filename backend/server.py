@@ -983,13 +983,20 @@ async def set_watchlist(w: Watchlist):
 # Maps consumer-friendly names to tradeable ETF/futures tickers Finnhub serves.
 # ==================================================================
 COMMODITY_MAP = [
-    {"key": "wti_oil",     "label": "WTI Crude Oil",      "unit": "bbl", "symbol": "USO",  "scale": 1.0,  "notes": "USO ETF tracks WTI futures"},
-    {"key": "brent_oil",   "label": "Brent Crude Oil",    "unit": "bbl", "symbol": "BNO",  "scale": 1.0,  "notes": "BNO ETF tracks Brent"},
-    {"key": "natural_gas", "label": "Natural Gas",        "unit": "MMBtu","symbol": "UNG", "scale": 1.0,  "notes": "UNG ETF tracks Henry Hub"},
-    {"key": "gasoline",    "label": "Gasoline (RBOB)",    "unit": "gal", "symbol": "UGA",  "scale": 1.0,  "notes": "UGA ETF tracks RBOB futures"},
-    {"key": "heating_oil", "label": "Heating Oil/Diesel", "unit": "gal", "symbol": "HEAT", "scale": 1.0,  "notes": "Heating oil proxy"},
-    {"key": "coal",        "label": "Coal (Thermal)",     "unit": "ton", "symbol": "KOL",  "scale": 1.0,  "notes": "Coal mining ETF proxy"},
-    {"key": "propane",     "label": "Propane",            "unit": "gal", "symbol": "AMLP", "scale": 0.20, "notes": "Propane via MLP basket proxy"},
+    {"key": "wti_oil",     "label": "WTI Crude Oil",      "unit": "bbl", "symbol": "USO",  "scale": 1.0, "notes": "USO ETF tracks WTI futures"},
+    {"key": "brent_oil",   "label": "Brent Crude Oil",    "unit": "bbl", "symbol": "BNO",  "scale": 1.0, "notes": "BNO ETF tracks Brent"},
+    {"key": "natural_gas", "label": "Natural Gas",        "unit": "MMBtu","symbol": "UNG", "scale": 1.0, "notes": "UNG ETF tracks Henry Hub"},
+    {"key": "gasoline",    "label": "Gasoline (RBOB)",    "unit": "gal", "symbol": "UGA",  "scale": 1.0, "notes": "UGA ETF tracks RBOB futures"},
+    {"key": "diesel",      "label": "Diesel / Heating Oil","unit": "gal","symbol": "HEAT", "scale": 1.0, "notes": "Heating oil proxy"},
+    {"key": "coal",        "label": "Coal (Thermal)",     "unit": "ton", "symbol": "KOL",  "scale": 1.0, "notes": "Coal mining ETF"},
+    {"key": "propane",     "label": "Propane",            "unit": "gal", "symbol": "AMLP", "scale": 0.20,"notes": "Propane via MLP basket"},
+    {"key": "energy_etf",  "label": "Energy Sector",      "unit": "share","symbol":"XLE",  "scale": 1.0, "notes": "S&P 500 energy sector ETF"},
+    {"key": "oil_services","label": "Oil Services",       "unit": "share","symbol":"OIH",  "scale": 1.0, "notes": "Major oilfield services basket"},
+    {"key": "exploration", "label": "Oil & Gas E&P",      "unit": "share","symbol":"XOP",  "scale": 1.0, "notes": "Exploration & production basket"},
+    {"key": "uranium",     "label": "Uranium",            "unit": "lb",  "symbol": "URA",  "scale": 1.0, "notes": "Uranium miners ETF"},
+    {"key": "clean_energy","label": "Clean Energy",       "unit": "share","symbol":"ICLN", "scale": 1.0, "notes": "Global clean energy basket"},
+    {"key": "midstream",   "label": "Midstream / Pipelines","unit": "share","symbol":"AMLP","scale":1.0,"notes": "Pipeline & MLP basket"},
+    {"key": "refiners",    "label": "Refiners",           "unit": "share","symbol":"CRAK", "scale": 1.0, "notes": "Oil refining ETF"},
 ]
 
 # Major oil & energy stocks for the home page energy section
