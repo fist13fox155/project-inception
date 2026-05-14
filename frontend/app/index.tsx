@@ -39,7 +39,7 @@ const USER_ID = 'local-user';
 
 const ACTIONS = [
   { key: 'document', label1: 'CREATE', label2: 'DOCUMENT', icon: 'document-text-outline' as const, color: theme.colors.green, glow: theme.colors.glowGreen, route: '/document' },
-  { key: 'stocks', label1: 'STOCK', label2: 'BROWSE', icon: 'bar-chart-outline' as const, color: theme.colors.blue, glow: theme.colors.glowBlue, route: '/stocks/browse' },
+  { key: 'world', label1: 'WORLD', label2: 'NEWS', icon: 'earth-outline' as const, color: theme.colors.blue, glow: theme.colors.glowBlue, route: '/world' },
   { key: 'jarvis', label1: 'TALK TO', label2: 'JARVIS', icon: 'chatbubbles-outline' as const, color: theme.colors.purple, glow: theme.colors.glowPurple, route: '/chat' },
 ];
 
