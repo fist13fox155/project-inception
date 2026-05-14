@@ -35,8 +35,20 @@ export default function StockTickerCard({
       testID={`stock-ticker-card-${quote.symbol}`}
     >
       <View style={styles.row}>
-        <Text style={styles.symbol} numberOfLines={1}>{quote.symbol}</Text>
-        <Text style={[styles.pct, { color }]}>
+        <Text
+          style={styles.symbol}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.55}
+        >
+          {quote.symbol}
+        </Text>
+        <Text
+          style={[styles.pct, { color }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+        >
           {up ? '+' : ''}{quote.change_pct.toFixed(2)}%
         </Text>
       </View>

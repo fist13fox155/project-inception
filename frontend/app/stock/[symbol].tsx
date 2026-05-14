@@ -25,6 +25,35 @@ export default function StockDetail() {
   const [rec, setRec] = useState<Rec | null>(null);
   const [loading, setLoading] = useState(true);
   const [recLoading, setRecLoading] = useState(false);
+  const [tracked, setTracked] = useState(false);
+  const [tracking, setTracking] = useState(false);
+
+  const USER_ID = 'local-user';
+
+  // Check tracking status
+  useEffect(() => {
+    fetch(`${API}/watchlist/${USER_ID}`)
+      .then(r => r.json())
+      .then(j => setTracked((j.symbols || []).includes(sym)))
+      .catch(() => {});
+  }, [sym]);
+
+  const toggleTrack = async () => {
+    setTracking(true);
+    try {
+      const r = await fetch(`${API}/watchlist/${USER_ID}`);
+      const j = await r.json();
+      const cur: string[] = j.symbols || [];
+      const next = tracked ? cur.filter((s) => s !== sym) : [...cur.filter((s) => s !== sym), sym];
+      await fetch(`${API}/watchlist`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: USER_ID, symbols: next }),
+      });
+      setTracked(!tracked);
+    } catch (e) { void (e); }
+    finally { setTracking(false); }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -156,6 +185,39 @@ export default function StockDetail() {
           )}
         </View>
       </ScrollView>
+
+      {/* Track / Untrack action bar */}
+      <View style={styles.actionBar}>
+        <Pressable
+          onPress={toggleTrack}
+          disabled={tracking}
+          style={[
+            styles.trackBtn,
+            { backgroundColor: tracked ? 'rgba(255,51,51,0.12)' : theme.colors.blue,
+              borderColor: tracked ? theme.colors.danger : theme.colors.blue },
+            tracking && { opacity: 0.6 },
+          ]}
+          testID="track-toggle"
+        >
+          {tracking ? (
+            <ActivityIndicator color={tracked ? theme.colors.danger : '#000814'} size="small" />
+          ) : (
+            <>
+              <Icon
+                name={tracked ? 'trash-outline' : 'add-circle-outline'}
+                size={18}
+                color={tracked ? theme.colors.danger : '#000814'}
+              />
+              <Text style={[
+                styles.trackBtnText,
+                { color: tracked ? theme.colors.danger : '#000814' },
+              ]}>
+                {tracked ? 'UNTRACK ' + sym : 'TRACK ' + sym}
+              </Text>
+            </>
+          )}
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
@@ -194,4 +256,15 @@ const styles = StyleSheet.create({
   sentDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
   newsTitle: { color: theme.colors.text, fontFamily: theme.fonts.bodyMedium, fontSize: 13, lineHeight: 18 },
   newsMeta: { color: theme.colors.textTertiary, fontFamily: theme.fonts.body, fontSize: 10, marginTop: 2 },
+  actionBar: {
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderTopWidth: 1, borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.bg,
+  },
+  trackBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, borderRadius: theme.radius.lg,
+    borderWidth: 1.5,
+  },
+  trackBtnText: { fontFamily: theme.fonts.heading, fontSize: 14, letterSpacing: 2 },
 });

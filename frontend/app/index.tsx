@@ -75,7 +75,23 @@ export default function Home() {
     try {
       const wRes = await fetch(`${API}/watchlist/${USER_ID}`);
       const wJson = await wRes.json();
-      const stored: string[] = (wJson.symbols && wJson.symbols.length ? wJson.symbols : DEFAULT_SYMBOLS);
+      const stored: string[] = (wJson.symbols || []);
+
+      // Empty watchlist → leave the home blank, the rotating Top Movers
+      // carousel renders in place of the grid until the user manually tracks.
+      if (!stored.length) {
+        setQuotes([]);
+        const hour = new Date().getHours();
+        const tod = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+        let brief = '';
+        try {
+          const b = await fetch(`${API}/jarvis/market-brief?user_name=${encodeURIComponent(architect)}`);
+          const bj = await b.json();
+          if (bj.brief) brief = `\n${bj.brief}`;
+        } catch {}
+        setGreeting(`Good ${tod} ${architect}.\nTap a mover below to start tracking.${brief}`);
+        return;
+      }
 
       const r = await fetch(`${API}/stocks/quotes?symbols=${stored.join(',')}`);
       const j = await r.json();
@@ -182,8 +198,7 @@ export default function Home() {
               <Text style={styles.dagrText}>DAGRCMD</Text>
             </Pressable>
             <Pressable onPress={logout} testID="logout" style={styles.logoutBtn}>
-              <Icon name="log-out-outline" size={11} color={theme.colors.blue} />
-              <Text style={styles.logoutText}>OUT</Text>
+              <Icon name="log-out-outline" size={16} color={theme.colors.blue} />
             </Pressable>
           </View>
         </View>
@@ -348,11 +363,11 @@ const styles = StyleSheet.create({
   },
   dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
   logoutBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    paddingHorizontal: 7, paddingVertical: 5,
-    borderRadius: theme.radius.full,
+    alignItems: 'center', justifyContent: 'center',
+    width: 34, height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(0,229,255,0.08)',
-    borderWidth: 1, borderColor: 'rgba(0,229,255,0.35)',
+    borderWidth: 1, borderColor: 'rgba(0,229,255,0.4)',
   },
   logoutText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 9, letterSpacing: 1.2 },
   degradedBox: {
