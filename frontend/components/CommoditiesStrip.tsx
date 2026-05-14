@@ -31,7 +31,7 @@ export default function CommoditiesStrip() {
       finally { if (alive) setLoading(false); }
     };
     load();
-    const id = setInterval(load, 60_000);
+    const id = setInterval(load, 30_000);
     return () => { alive = false; clearInterval(id); };
   }, []);
 

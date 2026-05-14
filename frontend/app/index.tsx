@@ -29,6 +29,7 @@ import EtherealOrbBackground from '../components/EtherealOrbBackground';
 import NewsTicker from '../components/NewsTicker';
 import CommoditiesStrip from '../components/CommoditiesStrip';
 import SkeletonStockGrid from '../components/SkeletonStockGrid';
+import TopMoversCarousel from '../components/TopMoversCarousel';
 import {
   isAuthenticated, getArchitectName, clearInceptionAuth, setSession, getVoice,
 } from '../lib/prefs';
@@ -169,7 +170,7 @@ export default function Home() {
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <Icon name="globe-outline" size={18} color={theme.colors.blue} />
-            <Text style={styles.logoText} numberOfLines={1}>INCEPTION</Text>
+            <Text style={styles.logoText} numberOfLines={1}>PROJECT INCEPTION</Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
@@ -177,12 +178,12 @@ export default function Home() {
               testID="open-dagrcmd"
               style={styles.dagrBadge}
             >
-              <Icon name="shield-half" size={11} color="#FF3333" />
+              <Icon name="shield-half" size={14} color="#FF3333" />
               <Text style={styles.dagrText}>DAGRCMD</Text>
             </Pressable>
             <Pressable onPress={logout} testID="logout" style={styles.logoutBtn}>
               <Icon name="log-out-outline" size={11} color={theme.colors.blue} />
-              <Text style={styles.logoutText}>LOGOUT</Text>
+              <Text style={styles.logoutText}>OUT</Text>
             </Pressable>
           </View>
         </View>
@@ -199,6 +200,26 @@ export default function Home() {
             <Text style={styles.degradedText}>LIVE DATA UNAVAILABLE</Text>
             <Text style={styles.degradedHint}>Pull to refresh</Text>
           </View>
+        ) : !quotes.length ? (
+          // No tracked stocks → auto-rotating Top Movers carousel
+          <>
+            <TopMoversCarousel onPickSymbol={async (sym) => {
+              await fetch(`${API}/watchlist`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: USER_ID, symbols: [sym] }),
+              }).catch(() => {});
+              fetchQuotes();
+            }} />
+            <Pressable
+              onPress={() => router.push('/stocks/browse' as any)}
+              style={styles.browseAllBtn}
+              testID="browse-all-stocks"
+            >
+              <Icon name="search" size={14} color={theme.colors.blue} />
+              <Text style={styles.browseAllText}>BROWSE FULL MARKET</Text>
+            </Pressable>
+          </>
         ) : (
           <View style={styles.tickerGrid}>
             {quotes.map((q) => (
@@ -314,16 +335,21 @@ const styles = StyleSheet.create({
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.blue },
   liveText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   dagrBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 7, paddingVertical: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 7,
     borderRadius: theme.radius.full,
-    backgroundColor: 'rgba(255,51,51,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,51,51,0.35)',
+    backgroundColor: 'rgba(255,51,51,0.12)',
+    borderWidth: 1.5, borderColor: '#FF3333',
+    shadowColor: '#FF3333',
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
   },
-  dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 9, letterSpacing: 1.2 },
+  dagrText: { color: '#FF3333', fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
   logoutBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 7, paddingVertical: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 7, paddingVertical: 5,
     borderRadius: theme.radius.full,
     backgroundColor: 'rgba(0,229,255,0.08)',
     borderWidth: 1, borderColor: 'rgba(0,229,255,0.35)',
@@ -337,6 +363,14 @@ const styles = StyleSheet.create({
   },
   degradedText: { color: theme.colors.amber, fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
   degradedHint: { color: theme.colors.textTertiary, fontFamily: theme.fonts.body, fontSize: 11 },
+  browseAllBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    marginTop: 10, paddingVertical: 10,
+    borderRadius: theme.radius.md,
+    backgroundColor: 'rgba(0,229,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(0,229,255,0.3)',
+  },
+  browseAllText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
   iconBtnSmall: { padding: 4 },
   tickerGrid: {
     flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, marginHorizontal: -4,

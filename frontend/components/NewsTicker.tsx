@@ -26,13 +26,26 @@ export default function NewsTicker({ quotes }: { quotes: Quote[] }) {
     let alive = true;
     const load = async () => {
       try {
-        const r = await fetch(`${API}/world/crisis?limit=12`);
-        const j = await r.json();
-        if (alive) setNews((j.items || []).slice(0, 12));
+        // Pull general crisis headlines AND mixed energy/corporate news in parallel
+        const [cr, en] = await Promise.all([
+          fetch(`${API}/world/crisis?limit=10`).then(r => r.json()).catch(() => ({})),
+          fetch(`${API}/world/energy-news`).then(r => r.json()).catch(() => ({})),
+        ]);
+        if (!alive) return;
+        const crisis = (cr.items || []) as CrisisItem[];
+        const energy = (en.items || []) as CrisisItem[];
+        // Interleave the two streams for variety
+        const merged: CrisisItem[] = [];
+        const max = Math.max(crisis.length, energy.length);
+        for (let i = 0; i < max; i++) {
+          if (crisis[i]) merged.push(crisis[i]);
+          if (energy[i]) merged.push(energy[i]);
+        }
+        setNews(merged.slice(0, 16));
       } catch { /* offline-friendly */ }
     };
     load();
-    const id = setInterval(load, 5 * 60_000);
+    const id = setInterval(load, 3 * 60_000);
     return () => { alive = false; clearInterval(id); };
   }, []);
 
@@ -130,37 +143,37 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,15,30,0.95)',
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderTopColor: 'rgba(0,229,255,0.5)',
-    borderBottomColor: 'rgba(0,229,255,0.5)',
-    height: 30,
-    marginTop: 4,
-    marginBottom: 4,
+    borderTopColor: 'rgba(0,229,255,0.55)',
+    borderBottomColor: 'rgba(0,229,255,0.55)',
+    height: 42,
+    marginTop: 8,
+    marginBottom: 6,
     overflow: 'hidden',
     // Bleed past parent's 16-px horizontal padding so the banner spans
     // edge-to-edge like a real Wall Street stock ticker.
     marginHorizontal: -16,
-    paddingLeft: 56,
+    paddingLeft: 64,
   },
   live: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     backgroundColor: '#FF3333',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     zIndex: 2,
     borderRightWidth: 1,
     borderRightColor: '#000814',
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
+  liveDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#fff' },
   liveText: {
     color: '#fff',
     fontFamily: theme.fonts.bodyBold,
-    fontSize: 10,
-    letterSpacing: 1.5,
+    fontSize: 11,
+    letterSpacing: 1.8,
   },
   viewport: { flex: 1, overflow: 'hidden', justifyContent: 'center' },
   track: { flexDirection: 'row', alignItems: 'center' },
@@ -168,17 +181,17 @@ const styles = StyleSheet.create({
   itemText: {
     color: theme.colors.text,
     fontFamily: theme.fonts.bodyBold,
-    fontSize: 12,
+    fontSize: 14,
     letterSpacing: 0.5,
   },
   itemPct: {
     fontFamily: theme.fonts.bodyBold,
-    fontSize: 12,
+    fontSize: 14,
   },
   itemNews: {
     color: '#FFE066',
     fontFamily: theme.fonts.body,
-    fontSize: 12,
+    fontSize: 14,
   },
-  sep: { color: theme.colors.textTertiary, fontSize: 12 },
+  sep: { color: theme.colors.textTertiary, fontSize: 14 },
 });

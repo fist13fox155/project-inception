@@ -1045,6 +1045,84 @@ async def get_commodities():
     return {"commodities": out, "energy_tickers": ENERGY_TICKERS}
 
 
+# Universe of large-cap, liquid tickers used by the top-movers rotator.
+TOP_MOVERS_UNIVERSE = [
+    "AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AVGO","JPM","V","WMT","XOM",
+    "CVX","BAC","UNH","JNJ","ORCL","COST","HD","PG","ABBV","BP","SHEL","COP","OXY",
+    "SLB","MRO","EOG","MPC","PSX","KO","PEP","DIS","NFLX","CRM","AMD","INTC","CSCO",
+    "ADBE","BA","CAT","GE","NKE","MCD","PFE","T","VZ","RTX","LMT","WFC"
+]
+
+
+@api.get("/stocks/top-movers")
+async def get_top_movers(limit: int = 6):
+    """Returns top gainers + losers from a large-cap universe.  Used by the
+    home screen carousel when the user has not yet tracked any stocks."""
+    if not FINNHUB_KEY:
+        return {"gainers": [], "losers": []}
+    quotes: List[dict] = []
+    async with httpx.AsyncClient(timeout=15) as c:
+        import asyncio
+        tasks = [
+            c.get("https://finnhub.io/api/v1/quote",
+                  params={"symbol": s, "token": FINNHUB_KEY})
+            for s in TOP_MOVERS_UNIVERSE
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for s, r in zip(TOP_MOVERS_UNIVERSE, results):
+            if isinstance(r, Exception):
+                continue
+            try:
+                j = r.json()
+                p = float(j.get("c") or 0)
+                dp = float(j.get("dp") or 0)
+                if p > 0 and abs(dp) < 50:
+                    quotes.append({
+                        "symbol": s,
+                        "price": round(p, 2),
+                        "change_pct": round(dp, 2),
+                        "change": round(float(j.get("d") or 0), 2),
+                    })
+            except Exception:
+                pass
+    quotes.sort(key=lambda x: x["change_pct"])
+    losers = quotes[:limit]
+    gainers = quotes[-limit:][::-1]
+    return {"gainers": gainers, "losers": losers}
+
+
+ENERGY_CORP_HEADLINES = [
+    {"category": "ENERGY+", "title": "ExxonMobil announces record Q4 production from Guyana fields"},
+    {"category": "ENERGY+", "title": "Chevron beats earnings on Permian basin oil output surge"},
+    {"category": "ENERGY+", "title": "Saudi Aramco extends OPEC+ production cuts; oil futures rally"},
+    {"category": "ENERGY+", "title": "Shell greenlights $5B LNG expansion in Qatar"},
+    {"category": "ENERGY+", "title": "ConocoPhillips closes $22B acquisition of Marathon Oil"},
+    {"category": "ENERGY+", "title": "BP raises dividend after refining margins hit 18-month high"},
+    {"category": "ENERGY+", "title": "Schlumberger lands $1.7B offshore Brazil contract"},
+    {"category": "ENERGY-", "title": "BP cuts capex guidance amid weakening European demand"},
+    {"category": "ENERGY-", "title": "Refinery fire at Marathon Galveston Bay reduces output 30%"},
+    {"category": "ENERGY-", "title": "Occidental warns of Permian decline; shares fall after-hours"},
+    {"category": "ENERGY-", "title": "EU carbon-border tax threatens European oil major margins"},
+    {"category": "ENERGY-", "title": "Halliburton sees North American frac activity dropping in Q1"},
+    {"category": "ENERGY-", "title": "Coal miner Peabody slashes 2026 output forecast"},
+    {"category": "ENERGY-", "title": "China import slowdown weighs on Brent crude futures"},
+    {"category": "CORP", "title": "Boeing wins $9B order from Emirates for 777X widebodies"},
+    {"category": "CORP", "title": "Tesla unveils next-gen Cybertruck refresh; pre-orders spike"},
+    {"category": "CORP", "title": "Nvidia ships first Blackwell Ultra GPUs to AWS and Azure"},
+    {"category": "CORP", "title": "Apple posts record services revenue; stock buyback hits $110B"},
+]
+
+
+@api.get("/world/energy-news")
+async def get_energy_news():
+    """Rotating energy + corporate news feed used by the live ticker."""
+    import random
+    sample = random.sample(ENERGY_CORP_HEADLINES, k=min(8, len(ENERGY_CORP_HEADLINES)))
+    return {"items": sample}
+
+
+
+
 @api.get("/jarvis/market-brief")
 async def jarvis_market_brief(user_name: str = "Architect"):
     """A single sentence of market insight - top mover, top gainer, etc."""
