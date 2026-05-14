@@ -206,7 +206,27 @@ export default function Home() {
         {/* News + Stocks ticker */}
         <NewsTicker quotes={quotes} />
 
-        {/* Stock Tickers - 3x3 grid with skeleton/graceful degradation */}
+        {/* Today's Movers — always visible, swipeable */}
+        <TopMoversCarousel onPickSymbol={async (sym) => {
+          const cur = await fetch(`${API}/watchlist/${USER_ID}`).then(r => r.json()).catch(() => ({ symbols: [] }));
+          const list: string[] = cur.symbols || [];
+          if (!list.includes(sym)) {
+            await fetch(`${API}/watchlist`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: USER_ID, symbols: [...list, sym] }),
+            }).catch(() => {});
+            fetchQuotes();
+          }
+        }} />
+
+        {/* My Watchlist — header + grid (or empty-state CTA) */}
+        <View style={styles.sectionHeader}>
+          <Icon name="bar-chart-outline" size={12} color={theme.colors.blue} />
+          <Text style={styles.sectionHeaderText}>MY WATCHLIST</Text>
+          <Text style={styles.sectionHeaderCount}>{quotes.length} TRACKED</Text>
+        </View>
+
         {loading ? (
           <SkeletonStockGrid count={6} />
         ) : feedError && !quotes.length ? (
@@ -216,25 +236,21 @@ export default function Home() {
             <Text style={styles.degradedHint}>Pull to refresh</Text>
           </View>
         ) : !quotes.length ? (
-          // No tracked stocks → auto-rotating Top Movers carousel
-          <>
-            <TopMoversCarousel onPickSymbol={async (sym) => {
-              await fetch(`${API}/watchlist`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: USER_ID, symbols: [sym] }),
-              }).catch(() => {});
-              fetchQuotes();
-            }} />
-            <Pressable
-              onPress={() => router.push('/stocks/browse' as any)}
-              style={styles.browseAllBtn}
-              testID="browse-all-stocks"
-            >
-              <Icon name="search" size={14} color={theme.colors.blue} />
-              <Text style={styles.browseAllText}>BROWSE FULL MARKET</Text>
-            </Pressable>
-          </>
+          <Pressable
+            onPress={() => router.push('/stocks/browse' as any)}
+            style={styles.emptyWatchlist}
+            testID="empty-watchlist"
+          >
+            <Icon name="add-circle-outline" size={22} color={theme.colors.blue} />
+            <Text style={styles.emptyWatchlistText}>NOTHING TRACKED YET</Text>
+            <Text style={styles.emptyWatchlistHint}>
+              Swipe a mover above or tap BROWSE FULL MARKET to add stocks here.
+            </Text>
+            <View style={styles.emptyWatchlistCta}>
+              <Icon name="search" size={12} color={theme.colors.blue} />
+              <Text style={styles.emptyWatchlistCtaText}>BROWSE FULL MARKET</Text>
+            </View>
+          </Pressable>
         ) : (
           <View style={styles.tickerGrid}>
             {quotes.map((q) => (
@@ -386,6 +402,55 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(0,229,255,0.3)',
   },
   browseAllText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 11, letterSpacing: 2 },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 18, marginBottom: 6,
+  },
+  sectionHeaderText: {
+    color: theme.colors.blue,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 10,
+    letterSpacing: 2,
+    flex: 1,
+  },
+  sectionHeaderCount: {
+    color: theme.colors.textTertiary,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1.2,
+  },
+  emptyWatchlist: {
+    alignItems: 'center',
+    padding: 18,
+    gap: 6,
+    borderRadius: theme.radius.lg,
+    backgroundColor: 'rgba(0,229,255,0.04)',
+    borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(0,229,255,0.4)',
+  },
+  emptyWatchlistText: {
+    color: theme.colors.blue,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 11,
+    letterSpacing: 2,
+    marginTop: 4,
+  },
+  emptyWatchlistHint: {
+    color: theme.colors.textTertiary,
+    fontFamily: theme.fonts.body,
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
+    maxWidth: 280,
+  },
+  emptyWatchlistCta: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: theme.radius.full,
+    backgroundColor: 'rgba(0,229,255,0.1)',
+    borderWidth: 1, borderColor: 'rgba(0,229,255,0.4)',
+  },
+  emptyWatchlistCtaText: { color: theme.colors.blue, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   iconBtnSmall: { padding: 4 },
   tickerGrid: {
     flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, marginHorizontal: -4,
