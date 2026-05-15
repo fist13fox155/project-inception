@@ -45,8 +45,10 @@ export default function BrowseMarket() {
         fetch(`${API}/stocks/top-movers?limit=20`).then(r => r.json()),
         fetch(`${API}/watchlist/${USER_ID}`).then(r => r.json()),
       ]);
-      setGainers(m.gainers || []);
-      setLosers(m.losers || []);
+      // Only replace existing data if we actually got new data — silences
+      // the empty-flash when Finnhub is throttling.
+      if ((m.gainers || []).length) setGainers(m.gainers);
+      if ((m.losers || []).length) setLosers(m.losers);
       setTracked(new Set(w.symbols || []));
     } catch { /* offline */ }
     finally { setLoading(false); setRefreshing(false); }

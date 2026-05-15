@@ -112,7 +112,16 @@ export default function Home() {
         seen.add(q.symbol);
         sane.push(q);
       }
-      setQuotes(sane);
+      // CRITICAL: only replace existing quotes when we actually got new ones.
+      // If Finnhub returns empty (e.g. 429 throttling) we keep the previous
+      // data so the user never sees the grid flash to empty mid-refresh.
+      if (sane.length > 0) {
+        setQuotes(sane);
+      } else if (!stored.length) {
+        // No watchlist at all → genuinely empty.
+        setQuotes([]);
+      }
+      // else: keep previous quotes silently
 
       // Auto-clean watchlist: remove tickers that came back invalid or insane
       const validSymbols = new Set(sane.map(q => q.symbol));

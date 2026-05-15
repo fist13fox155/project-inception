@@ -1049,7 +1049,10 @@ async def get_commodities():
             "change_pct": round(q["change_pct"], 2),
             "notes": c["notes"],
         })
-    return {"commodities": out, "energy_tickers": ENERGY_TICKERS}
+    result = {"commodities": out, "energy_tickers": ENERGY_TICKERS}
+    if out:
+        _cache_put(cache_key, result, ttl=60)
+    return result
 
 
 # Universe of large-cap, liquid tickers used by the top-movers rotator.
@@ -1060,6 +1063,19 @@ TOP_MOVERS_UNIVERSE = [
     "ADBE","BA","CAT","GE","NKE","MCD","PFE","T","VZ","RTX","LMT","WFC"
 ]
 
+# Simple in-memory TTL cache to absorb Finnhub 429s.  Maps endpoint key → (expiry_ts, value).
+import time as _time
+_finnhub_cache: Dict[str, tuple] = {}
+
+def _cache_get(key: str):
+    v = _finnhub_cache.get(key)
+    if v and v[0] > _time.time():
+        return v[1]
+    return None
+
+def _cache_put(key: str, value, ttl: int = 60):
+    _finnhub_cache[key] = (_time.time() + ttl, value)
+
 
 @api.get("/stocks/top-movers")
 async def get_top_movers(limit: int = 6):
@@ -1067,6 +1083,10 @@ async def get_top_movers(limit: int = 6):
     home screen carousel when the user has not yet tracked any stocks."""
     if not FINNHUB_KEY:
         return {"gainers": [], "losers": []}
+    cache_key = f"top-movers:{limit}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
     quotes: List[dict] = []
     async with httpx.AsyncClient(timeout=15) as c:
         import asyncio
@@ -1095,7 +1115,10 @@ async def get_top_movers(limit: int = 6):
     quotes.sort(key=lambda x: x["change_pct"])
     losers = quotes[:limit]
     gainers = quotes[-limit:][::-1]
-    return {"gainers": gainers, "losers": losers}
+    result = {"gainers": gainers, "losers": losers}
+    if gainers or losers:
+        _cache_put(cache_key, result, ttl=60)
+    return result
 
 
 ENERGY_CORP_HEADLINES = [
