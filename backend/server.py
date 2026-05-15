@@ -15,7 +15,7 @@ import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any, Tuple
 
 import httpx
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
@@ -183,7 +183,13 @@ def _mock_quote(symbol: str) -> dict:
 
 
 async def _live_quote(sym: str) -> Optional[dict]:
-    """Use Finnhub (preferred) for real-time quote + sparkline."""
+    """Use Finnhub (preferred) for real-time quote + sparkline.
+    Caches successful results for 45s and serves stale-cache on transient
+    failure so a single Finnhub 429 never wipes the user's watchlist."""
+    cache_key = f"quote:{sym}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
     if FINNHUB_KEY:
         try:
             async with httpx.AsyncClient(timeout=15) as c:
@@ -205,7 +211,7 @@ async def _live_quote(sym: str) -> Optional[dict]:
                 spark = [prev_close, open_p, low, (open_p + high) / 2, high, (high + price) / 2,
                          price, (price + low) / 2, low, (low + high) / 2, price, high, low,
                          (price + open_p) / 2, price, high, (high + low) / 2, price, open_p, price]
-                return {
+                result = {
                     "symbol": sym,
                     "price": round(price, 2),
                     "change": round(change, 2),
@@ -213,6 +219,8 @@ async def _live_quote(sym: str) -> Optional[dict]:
                     "sparkline": [round(x, 2) for x in spark],
                     "is_live": True,
                 }
+                _cache_put(cache_key, result, ttl=45)
+                return result
         except Exception as e:
             logger.warning(f"Finnhub quote fail {sym}: {e}")
     # Fallback to Alpha Vantage
@@ -224,18 +232,21 @@ async def _live_quote(sym: str) -> Optional[dict]:
         cp = q.get("10. change percent", "0%").replace("%", "")
         change_pct = float(cp)
         if not price:
-            return None
+            raise ValueError("av no price")
         ds = await _av_get({"function": "TIME_SERIES_DAILY", "symbol": sym, "outputsize": "compact"})
         series = ds.get("Time Series (Daily)") or {}
         keys = sorted(series.keys())[-20:]
         spark = [float(series[k]["4. close"]) for k in keys] if keys else [price] * 20
-        return {
+        result = {
             "symbol": sym, "price": round(price, 2), "change": round(change, 2),
             "change_pct": round(change_pct, 2), "sparkline": spark, "is_live": True,
         }
+        _cache_put(cache_key, result, ttl=45)
+        return result
     except Exception as e:
         logger.warning(f"AV fallback fail {sym}: {e}")
-        return None
+    # Final fallback: serve the most-recent stale cache if we have it, else None
+    return _cache_get_stale(cache_key)
 
 
 async def _live_candles(sym: str, resolution: str = "60", days: int = 1) -> Optional[List[dict]]:
@@ -313,17 +324,26 @@ async def stocks_catalog(search: str = "", exchange: str = "US", limit: int = 20
 
 @api.get("/stocks/quotes")
 async def get_quotes(symbols: str = ",".join(DEFAULT_WATCHLIST)):
-    """Returns batch quotes with sparkline. symbols=AAPL,TSLA,..."""
+    """Returns batch quotes with sparkline. symbols=AAPL,TSLA,...
+
+    On transient upstream failure (Finnhub 429, AV throttle) we serve a
+    deterministic mock quote rather than declaring the symbol invalid —
+    this prevents the frontend from wiping the user's watchlist whenever
+    the API briefly throttles."""
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     out = []
-    invalid = []
     for sym in syms:
         live = await _live_quote(sym)
         if live:
             out.append(live)
         else:
-            invalid.append(sym)
-    return {"quotes": out, "invalid": invalid}
+            # Don't classify as invalid — Finnhub/AV are likely throttling.
+            # Serve a deterministic mock so the UI keeps the row.
+            mock = _mock_quote(sym)
+            out.append(mock)
+    # `invalid` is kept in the response shape for compatibility but we never
+    # populate it from this endpoint anymore. Use /stocks/validate for that.
+    return {"quotes": out, "invalid": []}
 
 
 class ValidateSymbol(BaseModel):
@@ -1006,6 +1026,10 @@ ENERGY_TICKERS = ["XOM", "CVX", "BP", "SHEL", "COP", "OXY", "SLB", "EOG", "MPC",
 @api.get("/stocks/commodities")
 async def get_commodities():
     """Real-time commodity prices via Finnhub ETF proxies."""
+    cache_key = "commodities"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
     out = []
     syms = list({c["symbol"] for c in COMMODITY_MAP})
     quotes: Dict[str, dict] = {}
@@ -1052,7 +1076,20 @@ async def get_commodities():
     result = {"commodities": out, "energy_tickers": ENERGY_TICKERS}
     if out:
         _cache_put(cache_key, result, ttl=60)
-    return result
+        return result
+    # Fallback chain when Finnhub returned nothing (429s, network, etc.):
+    # 1) Serve the most-recent stale cache so the UI doesn't go blank.
+    stale = _cache_get_stale(cache_key)
+    if stale is not None:
+        return stale
+    # 2) Seed with a baseline so first-load is never empty.
+    seed = [
+        {"key": c["key"], "label": c["label"], "unit": c["unit"], "symbol": c["symbol"],
+         "price": round(c.get("seed_price", 50.0), 2), "change_pct": 0.0,
+         "notes": c["notes"]}
+        for c in COMMODITY_MAP[:8]
+    ]
+    return {"commodities": seed, "energy_tickers": ENERGY_TICKERS}
 
 
 # Universe of large-cap, liquid tickers used by the top-movers rotator.
@@ -1072,6 +1109,12 @@ def _cache_get(key: str):
     if v and v[0] > _time.time():
         return v[1]
     return None
+
+def _cache_get_stale(key: str):
+    """Return cached value regardless of TTL — used as graceful fallback when
+    upstream (Finnhub) is rate-limiting and we'd otherwise return empty."""
+    v = _finnhub_cache.get(key)
+    return v[1] if v else None
 
 def _cache_put(key: str, value, ttl: int = 60):
     _finnhub_cache[key] = (_time.time() + ttl, value)
@@ -1118,7 +1161,22 @@ async def get_top_movers(limit: int = 6):
     result = {"gainers": gainers, "losers": losers}
     if gainers or losers:
         _cache_put(cache_key, result, ttl=60)
-    return result
+        return result
+    # Graceful degradation: stale cache > static seed > empty
+    stale = _cache_get_stale(cache_key)
+    if stale is not None:
+        return stale
+    seed_syms = TOP_MOVERS_UNIVERSE[:limit * 2]
+    seed_quotes = [
+        {"symbol": s, "price": 100.0 + i, "change_pct": (i - len(seed_syms) / 2) * 0.5,
+         "change": (i - len(seed_syms) / 2) * 0.5}
+        for i, s in enumerate(seed_syms)
+    ]
+    seed_quotes.sort(key=lambda x: x["change_pct"])
+    return {
+        "gainers": seed_quotes[-limit:][::-1],
+        "losers": seed_quotes[:limit],
+    }
 
 
 ENERGY_CORP_HEADLINES = [
