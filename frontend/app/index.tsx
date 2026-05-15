@@ -75,7 +75,9 @@ export default function Home() {
     try {
       const wRes = await fetch(`${API}/watchlist/${USER_ID}`);
       const wJson = await wRes.json();
-      const stored: string[] = (wJson.symbols || []);
+      // De-dupe defensively — duplicates would crash the FlatList with
+      // "Encountered two children with the same key".
+      const stored: string[] = Array.from(new Set<string>(wJson.symbols || []));
 
       // Empty watchlist → leave the home blank, the rotating Top Movers
       // carousel renders in place of the grid until the user manually tracks.
@@ -97,11 +99,19 @@ export default function Home() {
       const j = await r.json();
 
       // Filter out insane / corrupt values — guard against bad Finnhub responses
-      const sane: Quote[] = (j.quotes || []).filter((q: Quote) =>
+      const rawSane: Quote[] = (j.quotes || []).filter((q: Quote) =>
         q && typeof q.price === 'number' && q.price > 0 && q.price < 1_000_000 &&
         typeof q.change_pct === 'number' && Math.abs(q.change_pct) < 100 &&
         Array.isArray(q.sparkline) && q.sparkline.length > 1
       );
+      // De-duplicate quotes by symbol (server may rarely echo a duplicate)
+      const seen = new Set<string>();
+      const sane: Quote[] = [];
+      for (const q of rawSane) {
+        if (seen.has(q.symbol)) continue;
+        seen.add(q.symbol);
+        sane.push(q);
+      }
       setQuotes(sane);
 
       // Auto-clean watchlist: remove tickers that came back invalid or insane

@@ -995,7 +995,7 @@ COMMODITY_MAP = [
     {"key": "exploration", "label": "Oil & Gas E&P",      "unit": "share","symbol":"XOP",  "scale": 1.0, "notes": "Exploration & production basket"},
     {"key": "uranium",     "label": "Uranium",            "unit": "lb",  "symbol": "URA",  "scale": 1.0, "notes": "Uranium miners ETF"},
     {"key": "clean_energy","label": "Clean Energy",       "unit": "share","symbol":"ICLN", "scale": 1.0, "notes": "Global clean energy basket"},
-    {"key": "midstream",   "label": "Midstream / Pipelines","unit": "share","symbol":"AMLP","scale":1.0,"notes": "Pipeline & MLP basket"},
+    {"key": "midstream",   "label": "Midstream / Pipelines","unit": "share","symbol":"EMLP","scale":1.0,"notes": "Pipeline & MLP basket"},
     {"key": "refiners",    "label": "Refiners",           "unit": "share","symbol":"CRAK", "scale": 1.0, "notes": "Oil refining ETF"},
 ]
 

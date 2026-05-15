@@ -42,10 +42,21 @@ export default function TopMoversCarousel({ onPickSymbol }: { onPickSymbol?: (s:
     return () => { alive = false; };
   }, []);
 
-  const combined: Card[] = useMemo(() => [
-    ...gainers.map(g => ({ ...g, kind: 'gainer' as const })),
-    ...losers.map(l => ({ ...l, kind: 'loser' as const })),
-  ], [gainers, losers]);
+  const combined: Card[] = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Card[] = [];
+    for (const g of gainers) {
+      if (seen.has(g.symbol)) continue;
+      seen.add(g.symbol);
+      out.push({ ...g, kind: 'gainer' });
+    }
+    for (const l of losers) {
+      if (seen.has(l.symbol)) continue;
+      seen.add(l.symbol);
+      out.push({ ...l, kind: 'loser' });
+    }
+    return out;
+  }, [gainers, losers]);
 
   if (loading) {
     return (
