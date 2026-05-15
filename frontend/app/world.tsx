@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
 import { useRouter } from 'expo-router';
 import CommoditiesStrip from '../components/CommoditiesStrip';
+import EtherealOrbBackground from '../components/EtherealOrbBackground';
 import { theme, API } from '../constants/theme';
 
 type CrisisItem = {
@@ -68,6 +69,7 @@ export default function WorldScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <EtherealOrbBackground />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="world-back" style={styles.iconBtn}>
           <Icon name="chevron-back" size={22} color={theme.colors.text} />
@@ -170,11 +172,12 @@ export default function WorldScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  safe: { flex: 1, backgroundColor: '#000814' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 12, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(127,252,255,0.18)',
+    backgroundColor: 'rgba(0,8,20,0.55)',
   },
   iconBtn: { padding: 4 },
   title: { color: theme.colors.text, fontFamily: theme.fonts.heading, fontSize: 16, letterSpacing: 3 },
@@ -194,12 +197,12 @@ const styles = StyleSheet.create({
   catChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.radius.full,
-    borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface,
+    borderWidth: 1, borderColor: 'rgba(127,252,255,0.25)', backgroundColor: 'rgba(0,8,20,0.55)',
   },
   catText: { color: theme.colors.textSecondary, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 1.5 },
   empty: { color: theme.colors.textTertiary, fontFamily: theme.fonts.body, fontSize: 13, marginTop: 32, textAlign: 'center' },
   newsCard: {
-    backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
+    backgroundColor: 'rgba(0,8,20,0.55)', borderWidth: 1, borderColor: 'rgba(127,252,255,0.22)',
     borderRadius: theme.radius.md, padding: 14, marginBottom: 10, gap: 6,
   },
   catTag: {

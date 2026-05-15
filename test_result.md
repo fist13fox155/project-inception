@@ -136,6 +136,18 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
+      Backgrounds + DAGRCMD channel-delete (May 15):
+      • Wrapped /document, /world, /chat with <EtherealOrbBackground /> + matched safe bg to #000814 (same as home). Cyan pulsing orb now visible on all three.
+      • Card/header/input backgrounds switched to rgba(0,8,20,0.55) overlay so orb glow shows through.
+      • Added DELETE /api/dagrcmd/channels/{channel_id} backend endpoint.
+        - Owner: wipes channel + all messages, broadcasts channel_deleted event.
+        - Non-owner: leaves channel, broadcasts member_left.
+      • comms.tsx: long-press a channel row → confirm delete/leave dialog.
+      • channel/[id].tsx: long-press the channel title in header → confirm delete/leave; WS now handles channel_deleted / channel_member_left → auto-bounce to comms.
+      • Chat bubble long-press delete was already wired and confirmed working.
+      Test creds in /app/memory/test_credentials.md (DAGRCMD GHOST 07 / 1420 has live channels).
+  - agent: "main"
+    message: |
       CRITICAL FIX (May 15): Backend was crash-looping on import due to `NameError: name 'Dict' is not defined` at line 1068 (TTLCache type annotation) and `cache_key is not defined` in get_commodities. This was the root cause of the user's "LIVE DATA UNAVAILABLE" complaint — every API call was 502/connection-refused.
       Fixes applied:
       • Added Dict, Any, Tuple to typing imports

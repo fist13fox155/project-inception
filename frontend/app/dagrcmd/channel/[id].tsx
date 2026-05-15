@@ -121,6 +121,16 @@ export default function ChannelScreen() {
               : null,
           };
           setMessages((prev) => prev.find(m => m.id === d.id) ? prev : [...prev, enriched]);
+        } else if (payload.type === 'delete' && payload.channel_id === channelId && payload.message_id) {
+          setMessages((prev) => prev.filter(m => m.id !== payload.message_id));
+        } else if ((payload.type === 'channel_deleted' || payload.type === 'channel_member_left' && payload.callsign === me.callsign) && payload.channel_id === channelId) {
+          Alert.alert(
+            'Channel closed',
+            payload.type === 'channel_deleted'
+              ? `Channel was deleted by ${payload.by || 'owner'}.`
+              : 'You have left this channel.',
+            [{ text: 'OK', onPress: () => router.replace('/dagrcmd/comms') }]
+          );
         }
       } catch {}
     };
@@ -352,6 +362,34 @@ export default function ChannelScreen() {
     ]);
   };
 
+  const deleteChannelFromHeader = () => {
+    if (!me || !channel) return;
+    const isOwner = channel.owner === me.callsign;
+    Alert.alert(
+      isOwner ? `DELETE ${channel.name}?` : `LEAVE ${channel.name}?`,
+      isOwner
+        ? 'You are the owner.\nThis will permanently delete the channel and ALL messages for every member.'
+        : `You will leave this channel.\nOwner: ${channel.owner}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isOwner ? 'Delete' : 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const r = await fetch(
+                `${API}/dagrcmd/channels/${channel.id}?callsign=${encodeURIComponent(me.callsign)}&auth_code=${encodeURIComponent(me.authCode)}`,
+                { method: 'DELETE' }
+              );
+              if (!r.ok) throw new Error(await r.text());
+              router.replace('/dagrcmd/comms');
+            } catch (e: any) { Alert.alert('Failed', String(e?.message || e)); }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading || !me || !channel) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -366,7 +404,12 @@ export default function ChannelScreen() {
         <Pressable onPress={() => router.back()} testID="ch-back" style={styles.iconBtn}>
           <Icon name="chevron-back" size={22} color={T.colors.textPrimary} />
         </Pressable>
-        <View style={styles.headerCenter}>
+        <Pressable
+          onLongPress={deleteChannelFromHeader}
+          delayLongPress={500}
+          style={styles.headerCenter}
+          testID="channel-title"
+        >
           <Text style={styles.title}>{channel.name}</Text>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, {
@@ -376,9 +419,9 @@ export default function ChannelScreen() {
             <Text style={styles.statusText}>
               {wsStatus === 'open' ? 'LIVE · E2E' : wsStatus === 'closed' ? 'OFFLINE' : 'CONNECTING'}
             </Text>
-            <Text style={styles.statusMeta}> · {officers.length} OPS</Text>
+            <Text style={styles.statusMeta}> · {officers.length} OPS · HOLD TO {channel.owner === me.callsign ? 'DELETE' : 'LEAVE'}</Text>
           </View>
-        </View>
+        </Pressable>
         <Pressable
           onPress={liveCallOn ? stopLiveCall : startLiveCall}
           style={[styles.callBtn, liveCallOn && styles.callBtnEnd]}

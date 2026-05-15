@@ -87,6 +87,35 @@ export default function CommsScreen() {
     finally { setBusy(false); }
   };
 
+  const deleteChannel = (ch: Channel) => {
+    if (!me) return;
+    const isOwner = ch.owner === me.callsign;
+    const title = isOwner ? `DELETE ${ch.name}?` : `LEAVE ${ch.name}?`;
+    const message = isOwner
+      ? `You are the owner.\nThis will permanently delete the channel and ALL messages for every member (${ch.members.length} operators).`
+      : `You will leave this channel.\nOwner: ${ch.owner}. Other members remain.`;
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: isOwner ? 'Delete' : 'Leave',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const r = await fetch(
+              `${API}/dagrcmd/channels/${ch.id}?callsign=${encodeURIComponent(me.callsign)}&auth_code=${encodeURIComponent(me.authCode)}`,
+              { method: 'DELETE' }
+            );
+            if (!r.ok) throw new Error(await r.text());
+            // Optimistic remove
+            setChannels(prev => prev.filter(c => c.id !== ch.id));
+          } catch (e: any) {
+            Alert.alert('Failed', String(e?.message || e));
+          }
+        },
+      },
+    ]);
+  };
+
   const logout = async () => {
     await clearIdentity();
     router.replace('/dagrcmd');
@@ -191,7 +220,10 @@ export default function CommsScreen() {
             <View key={c.id} style={styles.channelRow} testID={`channel-${c.id}`}>
               <Pressable
                 onPress={() => router.push(`/dagrcmd/channel/${c.id}` as any)}
+                onLongPress={() => deleteChannel(c)}
+                delayLongPress={500}
                 style={styles.channelLeft}
+                testID={`channel-press-${c.id}`}
               >
                 <View style={styles.channelIcon}>
                   <Icon name="lock-closed" size={16} color={T.colors.red} />
@@ -202,10 +234,15 @@ export default function CommsScreen() {
                     {c.members.length} OPERATORS · OWNER {c.owner}
                   </Text>
                   <Text style={styles.joinCode}>INVITE: {c.join_code}</Text>
+                  <Text style={styles.holdHint}>
+                    HOLD TO {c.owner === me.callsign ? 'DELETE CHANNEL' : 'LEAVE'}
+                  </Text>
                 </View>
               </Pressable>
               <Pressable
                 onPress={() => shareInvite(c)}
+                onLongPress={() => deleteChannel(c)}
+                delayLongPress={500}
                 style={styles.shareBtn}
                 testID={`share-${c.id}`}
               >
@@ -308,6 +345,7 @@ const styles = StyleSheet.create({
   channelName: { color: T.colors.textPrimary, fontFamily: T.fonts.heading, fontSize: 14, letterSpacing: 1.5 },
   channelMeta: { color: T.colors.textMuted, fontFamily: T.fonts.mono, fontSize: 10, marginTop: 2, letterSpacing: 1 },
   joinCode: { color: T.colors.amber, fontFamily: T.fonts.mono, fontSize: 10, marginTop: 2, letterSpacing: 1.5 },
+  holdHint: { color: T.colors.textMuted, fontFamily: T.fonts.mono, fontSize: 9, marginTop: 4, letterSpacing: 1.5, opacity: 0.7 },
   shareBtn: {
     paddingHorizontal: 10, paddingVertical: 8, borderRadius: T.radius.sm,
     borderWidth: 1, borderColor: 'rgba(255,160,0,0.4)',

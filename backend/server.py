@@ -1436,6 +1436,36 @@ async def join_channel(j: ChannelJoin):
     return chan
 
 
+@api.delete("/dagrcmd/channels/{channel_id}")
+async def delete_channel(channel_id: str, callsign: str, auth_code: str):
+    """Delete a channel.  Owner removes for everyone; non-owners just leave.
+    All messages within the channel are wiped when the owner deletes."""
+    cs = callsign.strip().upper()
+    officer = await db.dagr_officers.find_one({"callsign": cs})
+    if not officer or officer.get("auth_hash") != _hash_code(cs, auth_code):
+        raise HTTPException(401, "Auth failed")
+    chan = await db.dagr_channels.find_one({"id": channel_id})
+    if not chan:
+        raise HTTPException(404, "Channel not found")
+    if cs not in chan.get("members", []):
+        raise HTTPException(403, "Not a member of this channel")
+    members = list(chan.get("members", []))
+    if chan.get("owner") == cs:
+        # Owner deletes — wipe channel + all messages, broadcast to members.
+        await db.dagr_messages.delete_many({"channel_id": channel_id})
+        await db.dagr_channels.delete_one({"id": channel_id})
+        await _dagr_broadcast(members,
+            {"type": "channel_deleted", "channel_id": channel_id, "by": cs})
+        return {"deleted": True, "scope": "channel", "id": channel_id}
+    # Non-owner leaves the channel.
+    await db.dagr_channels.update_one(
+        {"id": channel_id}, {"$pull": {"members": cs}}
+    )
+    await _dagr_broadcast([m for m in members if m != cs],
+        {"type": "channel_member_left", "channel_id": channel_id, "callsign": cs})
+    return {"deleted": True, "scope": "leave", "id": channel_id}
+
+
 class EncryptedMessage(BaseModel):
     channel_id: str
     sender: str

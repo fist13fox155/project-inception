@@ -15,6 +15,7 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { theme, API } from '../constants/theme';
 import JarvisOrb from '../components/JarvisOrb';
+import EtherealOrbBackground from '../components/EtherealOrbBackground';
 import { getVoice, getArchitectName } from '../lib/prefs';
 
 type Msg = { id: string; role: 'user' | 'assistant'; content: string };
@@ -147,6 +148,7 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <EtherealOrbBackground />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="chat-back" style={styles.iconBtn}>
           <Icon name="chevron-back" size={24} color={theme.colors.text} />
@@ -239,11 +241,12 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  safe: { flex: 1, backgroundColor: '#000814' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(127,252,255,0.18)',
+    backgroundColor: 'rgba(0,8,20,0.55)',
   },
   iconBtn: { padding: 4 },
   headerCenter: { alignItems: 'center' },
@@ -259,8 +262,8 @@ const styles = StyleSheet.create({
     maxWidth: '78%', paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: theme.radius.lg, borderWidth: 1,
   },
-  bubbleAsst: { backgroundColor: theme.colors.surfaceElevated, borderColor: 'rgba(212,255,0,0.25)' },
-  bubbleUser: { backgroundColor: theme.colors.surface, borderColor: 'rgba(176,38,255,0.35)' },
+  bubbleAsst: { backgroundColor: 'rgba(0,8,20,0.65)', borderColor: 'rgba(127,252,255,0.35)' },
+  bubbleUser: { backgroundColor: 'rgba(0,8,20,0.45)', borderColor: 'rgba(176,38,255,0.35)' },
   bubbleText: { color: theme.colors.neon, fontFamily: theme.fonts.body, fontSize: 14, lineHeight: 20 },
   speakBtn: { alignSelf: 'flex-start', marginTop: 6, padding: 2 },
   typing: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginLeft: 40 },
@@ -268,13 +271,13 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,
     paddingHorizontal: 12, paddingVertical: 10,
-    borderTopWidth: 1, borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
+    borderTopWidth: 1, borderTopColor: 'rgba(127,252,255,0.18)',
+    backgroundColor: 'rgba(0,8,20,0.65)',
   },
   micBtn: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: theme.colors.bg,
-    borderWidth: 1, borderColor: theme.colors.border,
+    backgroundColor: 'rgba(0,8,20,0.6)',
+    borderWidth: 1, borderColor: 'rgba(127,252,255,0.3)',
     alignItems: 'center', justifyContent: 'center',
   },
   micBtnActive: { borderColor: theme.colors.danger, backgroundColor: 'rgba(255,51,102,0.1)' },
@@ -282,8 +285,8 @@ const styles = StyleSheet.create({
     flex: 1, minHeight: 44, maxHeight: 120,
     color: theme.colors.text, fontFamily: theme.fonts.body, fontSize: 15,
     paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10,
-    backgroundColor: theme.colors.bg,
-    borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.lg,
+    backgroundColor: 'rgba(0,8,20,0.6)',
+    borderWidth: 1, borderColor: 'rgba(127,252,255,0.3)', borderRadius: theme.radius.lg,
   },
   sendBtn: {
     width: 44, height: 44, borderRadius: 22,

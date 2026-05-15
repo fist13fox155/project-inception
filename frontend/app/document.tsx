@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { theme, API } from '../constants/theme';
+import EtherealOrbBackground from '../components/EtherealOrbBackground';
 
 const PRESETS = [
   'Pitch deck for an AI-powered finance app aimed at retail investors',
@@ -69,6 +70,7 @@ export default function DocumentScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <EtherealOrbBackground />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="doc-back" style={styles.iconBtn}>
           <Icon name="chevron-back" size={24} color={theme.colors.text} />
@@ -174,33 +176,34 @@ export default function DocumentScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  safe: { flex: 1, backgroundColor: '#000814' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(127,252,255,0.18)',
+    backgroundColor: 'rgba(0,8,20,0.55)',
   },
   iconBtn: { padding: 4 },
   title: { color: theme.colors.text, fontFamily: theme.fonts.heading, fontSize: 16, letterSpacing: 3 },
   card: {
-    backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
+    backgroundColor: 'rgba(0,8,20,0.55)', borderWidth: 1, borderColor: 'rgba(127,252,255,0.22)',
     borderRadius: theme.radius.lg, padding: 16,
   },
   label: { color: theme.colors.textSecondary, fontFamily: theme.fonts.bodyBold, fontSize: 10, letterSpacing: 2, marginBottom: 10 },
   textarea: {
     color: theme.colors.text, fontFamily: theme.fonts.body, fontSize: 15,
-    backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border,
+    backgroundColor: 'rgba(0,8,20,0.6)', borderWidth: 1, borderColor: 'rgba(127,252,255,0.25)',
     borderRadius: theme.radius.md, padding: 14, minHeight: 110, textAlignVertical: 'top',
   },
   chip: {
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border,
+    backgroundColor: 'rgba(0,8,20,0.6)', borderWidth: 1, borderColor: 'rgba(127,252,255,0.25)',
   },
   chipText: { color: theme.colors.textSecondary, fontFamily: theme.fonts.body, fontSize: 11 },
   formatRow: { flexDirection: 'row', gap: 10 },
   formatOpt: {
     flex: 1, paddingVertical: 18, alignItems: 'center', gap: 4,
-    backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md,
+    backgroundColor: 'rgba(0,8,20,0.6)', borderWidth: 1, borderColor: 'rgba(127,252,255,0.25)', borderRadius: theme.radius.md,
   },
   formatOptActive: {
     borderColor: 'rgba(0,255,102,0.4)', backgroundColor: 'rgba(0,255,102,0.05)',
